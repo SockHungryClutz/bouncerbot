@@ -1,0 +1,1 @@
+real bouncerbot for use goes here, the "bouncerbot" directory is for the stuff going to git, clean out that info first
