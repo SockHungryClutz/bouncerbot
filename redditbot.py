@@ -135,7 +135,10 @@ class RedditBot():
 		for post in topPosts:
 			if not post.id in self.redditCache[3]:
 				self.redditCache[3].append(str(post.id))
-				self.postQueue.put([post.author.name, post.url, post.shortlink])
+				if post.over_18:
+					self.postQueue.put([post.author.name, '<'+post.url+'> **NSFW**', '<'+post.shortlink+'> **NSFW**'])
+				else:
+					self.postQueue.put([post.author.name, post.url, post.shortlink])
 				l = len(self.redditCache[3])
 				if l >= 40:
 					self.redditCache[3] = self.redditCache[3][l-30:]
