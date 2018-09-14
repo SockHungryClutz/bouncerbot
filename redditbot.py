@@ -1,6 +1,7 @@
 # WOOHOO! Makin a reddit bot and stuff!
 import praw
 import time
+import asyncio
 from snoopsnoo import SnoopSnooAPI
 
 # Define Helper Functions
@@ -47,6 +48,14 @@ def writeAcceptedUsers(au):
 		ostr += usr + '\n'
 	writeFile("acceptedusers.txt", ostr, 'w')
 
+# Manages how long each task should sleep, posting a warning if a task takes too long
+def checkTime(atime, btime, cr):
+	sleeptime = atime - btime
+	if sleeptime < 0:
+		print("!Coroutine "+ cr +" went over time! " + str(sleeptime))
+		sleeptime = 0
+	return sleeptime
+
 """
 Main class of the whole damn deal
 """
@@ -67,6 +76,8 @@ class RedditBot():
 		self.REDDIT_REFRESH_RATE = int(config['general']['reddit_new_refresh'])
 		self.TOP_REFRESH_RATE = int(config['general']['reddit_top_refresh'])
 		self.SNOOPSNOO_REFRESH_RATE = int(config['general']['snoop_snoo_refresh'])
+		self.EXIT_POLL_RATE = int(config['general']['reddit_exit_refresh'])
+		self.QUEUE_POLL_RATE = int(config['general']['reddit_queue_poll'])
 		self.CYCLES_IN_REVIEW = config['general']['review_cycles']
 		self.MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
 		self.REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
@@ -75,13 +86,9 @@ class RedditBot():
 		self.postQueue = queueList[1]
 		self.manualQueue = queueList[2]
 		
+		self.gracefulExit = False
+		
 		print("Reddit initialize success!")
-	
-	
-	# checks abort queue for exit condition
-	def checkAbort(self):
-		ge = parseFile("closegracefully.txt", False)
-		return ge[0] != "no"
 	
 	# Whether or not a user meets the requirements
 	def isQualified(self, subKarma, comKarma):
@@ -91,81 +98,25 @@ class RedditBot():
 			c = comKarma
 		return (subKarma + c >= self.REQUIRED_KARMA_TOTAL)
 	
-	# Checks whether a user meets the requirements using snoopsnoo
-	def isQualifiedSnoop(self, user):
-		jd = SnoopSnooAPI.getSubredditActivity(user, "furry_irl")
+	# Async - Checks whether a user meets the requirements using snoopsnoo
+	async def async_isQualifiedSnoop(self, user):
+		jd = await SnoopSnooAPI.async_getSubredditActivity(user, "furry_irl")
 		if jd != None:
 			skarma = jd["submission_karma"]
 			ckarma = jd["comment_karma"]
 			return self.isQualified(skarma, ckarma)
 		return False
 	
-	# Refreshes snoopsnoo for tracked users
-	def snoopSnooRefresh(self):
-		print("Time to refresh SnoopSnoo for " + str(len(self.redditCache[1])) + " users...")
-		u = 0
-		while u < len(self.redditCache[1]):
-			usr = self.redditCache[1][u]
-			self.r = SnoopSnooAPI.refreshSnoop(usr)
-			if self.r != "OK":
-				print("Error in SS refresh for '" + usr + "': " + self.r)
-				u += 1
-			else:
-				if self.isQualifiedSnoop(usr):
-					print("CONGRATULATIONS!! " + usr + " is qualified to join!")
-					# Add user to queue so discord side can announce it
-					self.acceptQueue.put(usr)
-					self.acceptedUsers.append(usr)
-					self.redditCache[1].pop(u)
-					self.redditCache[2].pop(u)
-				else:
-					self.redditCache[2][u] = str(int(self.redditCache[2][u]) - 1)
-					if self.redditCache[2][u] == "0":
-						self.redditCache[1].pop(u)
-						self.redditCache[2].pop(u)
-					else:
-						u += 1
-		# Write the (hopefully changed) accepted users list
-		writeAcceptedUsers(self.acceptedUsers)
-	
-	# gets the current top posts for the past day, and sends new ones to the queue
-	def getTopPosts(self):
-		# TODO: hide NSFW content (post.over_18)
-		topPosts = self.sr.top('day', limit=10)
-		for post in topPosts:
-			if not post.id in self.redditCache[3]:
-				self.redditCache[3].append(str(post.id))
-				if post.over_18:
-					self.postQueue.put([post.author.name, '<'+post.url+'> **NSFW**', '<'+post.shortlink+'> **NSFW**'])
-				else:
-					self.postQueue.put([post.author.name, post.url, post.shortlink])
-				l = len(self.redditCache[3])
-				if l >= 40:
-					self.redditCache[3] = self.redditCache[3][l-30:]
-	
-	# main loop
-	def mainLoop(self):
-		h = 0
-		e = 0
-		gracefulExit = False
+	# Async - gets new posts and checks users periodically
+	async def async_newUsers(self):
 		lastSubmission = self.redditCache[0][0]
-		while not gracefulExit:
+		while not self.gracefulExit:
 			# time how long a cycle takes so it always starts at the right time
 			startTime = time.time()
 			n = 25
 			si = 0
 			newPosts = self.sr.new(limit=n)
 			users = []
-			
-			# TODO: check for manual users every cycle, 
-			# remove from self.manualQueue until empty
-			while not self.manualQueue.empty():
-				newUser = self.manualQueue.get()
-				self.acceptedUsers.append(newUser)
-				if newUser in self.redditCache[1]:
-					idx = self.redditCache[1].index(newUser)
-					self.redditCache[1].pop(idx)
-					self.redditCache[2].pop(idx)
 			
 			# search through the latest for the last id, expanding search if
 			# latest was not found in each batch of 25
@@ -211,34 +162,116 @@ class RedditBot():
 				self.redditCache[1].append(users[si].name)
 				self.redditCache[2].append(self.CYCLES_IN_REVIEW)
 				si -= 1
-			# increase reddit cycle counter
-			h += 1
-			e += 1
-			
-			# do snoopsnoo calling if cycles met
-			if h == self.SNOOPSNOO_REFRESH_RATE:
-				h = 0
-				self.snoopSnooRefresh()
-			# check top posts too
-			if e == self.TOP_REFRESH_RATE:
-				e = 0
-				self.getTopPosts()
 			# Write out the user cache
 			self.redditCache[0][0] = lastSubmission
 			writeUserCache(self.redditCache)
 			
-			# Check to see if this should exit before continuing
-			gracefulExit = self.checkAbort()
-			if gracefulExit:
-				# None tells the discord process this is shutting down
+			# keep the pace
+			endTime = time.time()
+			await asyncio.sleep(checkTime(self.REDDIT_REFRESH_RATE, startTime - endTime, "async_newUsers"))
+	
+	# Async - checks top posts of the subreddit
+	async def async_topPosts(self):
+		await asyncio.sleep(self.TOP_REFRESH_RATE)
+		while not self.gracefulExit:
+			startTime = time.time()
+			topPosts = self.sr.top('day', limit=10)
+			for post in topPosts:
+				if not post.id in self.redditCache[3]:
+					self.redditCache[3].append(str(post.id))
+					if post.over_18:
+						self.postQueue.put([post.author.name, '<'+post.url+'> **NSFW**', '<'+post.shortlink+'> **NSFW**'])
+					else:
+						self.postQueue.put([post.author.name, post.url, post.shortlink])
+					l = len(self.redditCache[3])
+					if l >= 40:
+						self.redditCache[3] = self.redditCache[3][l-30:]
+			writeUserCache(self.redditCache)
+			endTime = time.time()
+			await asyncio.sleep(checkTime(self.TOP_REFRESH_RATE, startTime - endTime, "async_topPosts"))
+	
+	# Async - checks users against snoopsnoo
+	async def async_checkUsers(self):
+		await asyncio.sleep(self.SNOOPSNOO_REFRESH_RATE)
+		while not self.gracefulExit:
+			startTime = time.time()
+			print("Time to refresh SnoopSnoo for " + str(len(self.redditCache[1])) + " users...")
+			u = 0
+			while u < len(self.redditCache[1]):
+				usr = self.redditCache[1][u]
+				self.r = await SnoopSnooAPI.async_refreshSnoop(usr)
+				if self.r != "OK":
+					print("Error in SS refresh for '" + usr + "': " + self.r)
+					u += 1
+				else:
+					if await self.async_isQualifiedSnoop(usr):
+						print("CONGRATULATIONS!! " + usr + " is qualified to join!")
+						# Add user to queue so discord side can announce it
+						self.acceptQueue.put(usr)
+						self.acceptedUsers.append(usr)
+						self.redditCache[1].pop(u)
+						self.redditCache[2].pop(u)
+					else:
+						self.redditCache[2][u] = str(int(self.redditCache[2][u]) - 1)
+						if self.redditCache[2][u] == "0":
+							self.redditCache[1].pop(u)
+							self.redditCache[2].pop(u)
+						else:
+							u += 1
+			# Write the (hopefully changed) accepted users list
+			writeAcceptedUsers(self.acceptedUsers)
+			endTime = time.time()
+			await asyncio.sleep(checkTime(self.SNOOPSNOO_REFRESH_RATE, startTime - endTime, "async_checkUsers"))
+	
+	# Async - adds users from the ignore queue
+	async def async_ignore(self):
+		await asyncio.sleep(self.QUEUE_POLL_RATE)
+		while not self.gracefulExit:
+			startTime = time.time()
+			# remove from self.manualQueue until empty
+			while not self.manualQueue.empty():
+				newUser = self.manualQueue.get()
+				self.acceptedUsers.append(newUser)
+				if newUser in self.redditCache[1]:
+					idx = self.redditCache[1].index(newUser)
+					self.redditCache[1].pop(idx)
+					self.redditCache[2].pop(idx)
+			endTime = time.time()
+			await asyncio.sleep(checkTime(self.QUEUE_POLL_RATE, startTime - endTime, "async_ignore"))
+	
+	# Async - checks for exit conditions and prepares to stop
+	async def async_checkExit(self):
+		await asyncio.sleep(self.EXIT_POLL_RATE)
+		while not self.gracefulExit:
+			ge = parseFile("closegracefully.txt", False)
+			if ge[0] != "no":
 				self.acceptQueue.put(None)
+				self.gracefulExit = True
 				self.acceptQueue.close()
 				self.postQueue.close()
 				break
-			
-			# keep the pace
-			endTime = time.time()
-			sleeptime = (60 * self.REDDIT_REFRESH_RATE) - (startTime - endTime)
-			if sleeptime < 0:
-				sleeptime = 0
-			time.sleep((60 * self.REDDIT_REFRESH_RATE) - (startTime - endTime))
+			await asyncio.sleep(self.EXIT_POLL_RATE)
+	
+	# sets up the coroutines for the bot to run
+	async def run(self):
+		tasks = []
+		# these async functions, should be gucci coexisting 
+		# because its technically single threaded...
+		# have to think of the consequences of changing data midway though
+		tasks.append(asyncio.ensure_future(self.async_newUsers()))
+		tasks.append(asyncio.ensure_future(self.async_topPosts()))
+		tasks.append(asyncio.ensure_future(self.async_checkUsers()))
+		tasks.append(asyncio.ensure_future(self.async_ignore()))
+		tasks.append(asyncio.ensure_future(self.async_checkExit()))
+		# Quit as soon as one returns (the checkExit), don't care about results
+		done, notdone = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+		for t in notdone:
+			t.cancel()
+
+def initBotAndRun(queueList, config):
+	rb = RedditBot(queueList, config)
+	loop = asyncio.get_event_loop()
+	try:
+		loop.run_until_complete(rb.run())
+	finally:
+		loop.close()
