@@ -1,8 +1,9 @@
-# WOOHOO! Makin a reddit bot and stuff!
+# Reddit bot that handles the reddit side of things
 import praw
 import time
 import asyncio
 from snoopsnoo import SnoopSnooAPI
+from RollingLogger import RollingLogger
 
 # Define Helper Functions
 # Reads a file, giving back a list of all lines (including line endings)
@@ -52,26 +53,25 @@ def writeAcceptedUsers(au):
 def checkTime(atime, btime, cr):
 	sleeptime = atime - btime
 	if sleeptime < 0:
-		print("!Coroutine "+ cr +" went over time! " + str(sleeptime))
+		self.logger.warning("!Coroutine "+ cr +" went over time! " + str(sleeptime))
 		sleeptime = 0
 	return sleeptime
 
 """
-Main class of the whole damn deal
+Main class for the reddit side
 """
 class RedditBot():
 	def __init__(self, queueList, config):
 		# Accepted users is one user per line
 		# User cache has the last postID first, then a line of all tracking users,
 		# then a line of number of days left to track each user
-		print("Starting RedditBot...")
 		self.acceptedUsers = parseFile("acceptedusers.txt", False)
 		self.redditCache = parseFile("redditcache.txt", True)
 
 		self.r = praw.Reddit(client_id=config['reddit_creds']['client_id'],
 							client_secret=config['reddit_creds']['client_secret'],
 							user_agent=config['reddit_creds']['user_agent'])
-		self.sr = self.r.subreddit("furry_irl")
+		self.sr = self.r.subreddit(subreddit = config['general']['subreddit'])
 		
 		self.REDDIT_REFRESH_RATE = int(config['general']['reddit_new_refresh'])
 		self.TOP_REFRESH_RATE = int(config['general']['reddit_top_refresh'])
@@ -85,10 +85,13 @@ class RedditBot():
 		self.acceptQueue = queueList[0]
 		self.postQueue = queueList[1]
 		self.manualQueue = queueList[2]
+
+		# Start the logger
+		self.logger = RollingLogger(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']))
 		
 		self.gracefulExit = False
 		
-		print("Reddit initialize success!")
+		self.logger.info("Reddit initialize success!")
 	
 	# Whether or not a user meets the requirements
 	def isQualified(self, subKarma, comKarma):
@@ -100,7 +103,7 @@ class RedditBot():
 	
 	# Async - Checks whether a user meets the requirements using snoopsnoo
 	async def async_isQualifiedSnoop(self, user):
-		jd = await SnoopSnooAPI.async_getSubredditActivity(user, "furry_irl")
+		jd = await SnoopSnooAPI.async_getSubredditActivity(user, self.sr)
 		if jd != None:
 			skarma = jd["submission_karma"]
 			ckarma = jd["comment_karma"]
@@ -139,7 +142,7 @@ class RedditBot():
 					si = 0
 					users = []
 					newPosts = self.sr.new(limit=n)
-			print("grabbed " + str(si) + " new posts!")
+			self.logger.info("grabbed " + str(si) + " new posts!")
 			si -= 1
 			
 			# iterate through all the recent posts
@@ -175,6 +178,7 @@ class RedditBot():
 		await asyncio.sleep(self.TOP_REFRESH_RATE)
 		while not self.gracefulExit:
 			startTime = time.time()
+			self.logger.info("Refreshing top 10 posts...")
 			topPosts = self.sr.top('day', limit=10)
 			for post in topPosts:
 				if not post.id in self.redditCache[3]:
@@ -195,17 +199,17 @@ class RedditBot():
 		await asyncio.sleep(self.SNOOPSNOO_REFRESH_RATE)
 		while not self.gracefulExit:
 			startTime = time.time()
-			print("Time to refresh SnoopSnoo for " + str(len(self.redditCache[1])) + " users...")
+			self.logger.info("Time to refresh SnoopSnoo for " + str(len(self.redditCache[1])) + " users...")
 			u = 0
 			while u < len(self.redditCache[1]):
 				usr = self.redditCache[1][u]
 				self.r = await SnoopSnooAPI.async_refreshSnoop(usr)
 				if self.r != "OK":
-					print("Error in SS refresh for '" + usr + "': " + self.r)
+					self.logger.warning("Error in SS refresh for '" + usr + "': " + self.r)
 					u += 1
 				else:
 					if await self.async_isQualifiedSnoop(usr):
-						print("CONGRATULATIONS!! " + usr + " is qualified to join!")
+						self.logger.info("CONGRATULATIONS!! " + usr + " is qualified to join!")
 						# Add user to queue so discord side can announce it
 						self.acceptQueue.put(usr)
 						self.acceptedUsers.append(usr)
@@ -220,6 +224,7 @@ class RedditBot():
 							u += 1
 			# Write the (hopefully changed) accepted users list
 			writeAcceptedUsers(self.acceptedUsers)
+			writeUserCache(self.redditCache)
 			endTime = time.time()
 			await asyncio.sleep(checkTime(self.SNOOPSNOO_REFRESH_RATE, startTime - endTime, "async_checkUsers"))
 	
@@ -231,6 +236,7 @@ class RedditBot():
 			# remove from self.manualQueue until empty
 			while not self.manualQueue.empty():
 				newUser = self.manualQueue.get()
+				self.logger.info("ignoring another user: "+newUser)
 				self.acceptedUsers.append(newUser)
 				if newUser in self.redditCache[1]:
 					idx = self.redditCache[1].index(newUser)
@@ -245,6 +251,7 @@ class RedditBot():
 		while not self.gracefulExit:
 			ge = parseFile("closegracefully.txt", False)
 			if ge[0] != "no":
+				self.logger.info("Reddit process is shutting down now")
 				self.acceptQueue.put(None)
 				self.gracefulExit = True
 				self.acceptQueue.close()
