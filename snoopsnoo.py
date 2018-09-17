@@ -56,6 +56,7 @@ class SnoopSnooAPI():
 			return ("error getting user: " + user)
 		idx = upd.find('"results":')
 		upd = upd[idx+11:-2]
+		print(upd)
 		jd = SnoopSnooAPI.jsonStrToObj(upd)
 		r2 = requests.post("https://snoopsnoo.com/update",json=jd)
 		return r2.text
@@ -106,7 +107,10 @@ class SnoopSnooAPI():
 				return ("error getting user: " + user)
 			idx = upd.find('"results":')
 			upd = upd[idx+11:-2]
-			jd = SnoopSnooAPI.jsonStrToObj(upd)
+			try:
+				jd = SnoopSnooAPI.jsonStrToObj(upd)
+			except Exception as e:
+				return str(e)
 			# this must be done synchronously since the old version of aiohttp used by the
 			# the old version of discord.py doesn't support json POST
 			r2 = requests.post("https://snoopsnoo.com/update",json=jd)

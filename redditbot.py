@@ -71,7 +71,7 @@ class RedditBot():
 		self.r = praw.Reddit(client_id=config['reddit_creds']['client_id'],
 							client_secret=config['reddit_creds']['client_secret'],
 							user_agent=config['reddit_creds']['user_agent'])
-		self.sr = self.r.subreddit(subreddit = config['general']['subreddit'])
+		self.sr = self.r.subreddit(config['general']['subreddit'])
 		
 		self.REDDIT_REFRESH_RATE = int(config['general']['reddit_new_refresh'])
 		self.TOP_REFRESH_RATE = int(config['general']['reddit_top_refresh'])
@@ -103,7 +103,7 @@ class RedditBot():
 	
 	# Async - Checks whether a user meets the requirements using snoopsnoo
 	async def async_isQualifiedSnoop(self, user):
-		jd = await SnoopSnooAPI.async_getSubredditActivity(user, self.sr)
+		jd = await SnoopSnooAPI.async_getSubredditActivity(user, self.sr.display_name)
 		if jd != None:
 			skarma = jd["submission_karma"]
 			ckarma = jd["comment_karma"]
@@ -242,6 +242,8 @@ class RedditBot():
 					idx = self.redditCache[1].index(newUser)
 					self.redditCache[1].pop(idx)
 					self.redditCache[2].pop(idx)
+			writeAcceptedUsers(self.acceptedUsers)
+			writeUserCache(self.redditCache)
 			endTime = time.time()
 			await asyncio.sleep(checkTime(self.QUEUE_POLL_RATE, startTime - endTime, "async_ignore"))
 	
