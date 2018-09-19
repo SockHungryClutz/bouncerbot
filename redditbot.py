@@ -4,30 +4,9 @@ import time
 import asyncio
 from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger
+from FileParser import FileParser
 
 # Define Helper Functions
-# Reads a file, giving back a list of all lines (including line endings)
-def readFile(filename):
-	with open(filename) as f:
-		return f.readlines()
-
-# Returns a cleaned list from a file, may or may not be subdivided per line
-def parseFile(filename, split):
-	r = readFile(filename)
-	i = len(r) - 1
-	while i >= 0:
-		if split:
-			r[i] = r[i][:-1].split()
-		else:
-			r[i] = r[i][:-1]
-		i -= 1
-	return r
-
-# Writes out to a file, can take a mode as argument
-def writeFile(filename, content, mode):
-	with open(filename, mode) as f:
-		f.write(content)
-
 # Writes the usercache out to file
 def writeUserCache(uc):
 	ostr = uc[0][0] + '\n'
@@ -40,14 +19,14 @@ def writeUserCache(uc):
 	for pstr in uc[3]:
 		ostr += pstr + ' '
 	ostr += '\n'
-	writeFile("redditcache.txt", ostr, 'w')
+	FileParser.writeFile("redditcache.txt", ostr, 'w')
 
 # Writes the accepted users list out to file
 def writeAcceptedUsers(au):
 	ostr = ""
 	for usr in au:
 		ostr += usr + '\n'
-	writeFile("acceptedusers.txt", ostr, 'w')
+	FileParser.writeFile("acceptedusers.txt", ostr, 'w')
 
 # Manages how long each task should sleep, posting a warning if a task takes too long
 def checkTime(atime, btime, cr):
@@ -61,12 +40,12 @@ def checkTime(atime, btime, cr):
 Main class for the reddit side
 """
 class RedditBot():
-	def __init__(self, queueList, config):
+	def __init__(self, queueList, config, usrlist):
 		# Accepted users is one user per line
 		# User cache has the last postID first, then a line of all tracking users,
 		# then a line of number of days left to track each user
-		self.acceptedUsers = parseFile("acceptedusers.txt", False)
-		self.redditCache = parseFile("redditcache.txt", True)
+		self.acceptedUsers = usrlist
+		self.redditCache = FileParser.parseFile("redditcache.txt", True)
 
 		self.r = praw.Reddit(client_id=config['reddit_creds']['client_id'],
 							client_secret=config['reddit_creds']['client_secret'],
@@ -77,14 +56,12 @@ class RedditBot():
 		self.TOP_REFRESH_RATE = int(config['general']['reddit_top_refresh'])
 		self.SNOOPSNOO_REFRESH_RATE = int(config['general']['snoop_snoo_refresh'])
 		self.EXIT_POLL_RATE = int(config['general']['reddit_exit_refresh'])
-		self.QUEUE_POLL_RATE = int(config['general']['reddit_queue_poll'])
 		self.CYCLES_IN_REVIEW = config['general']['review_cycles']
 		self.MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
 		self.REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
 		
 		self.acceptQueue = queueList[0]
 		self.postQueue = queueList[1]
-		self.manualQueue = queueList[2]
 
 		# Start the logger
 		self.logger = RollingLogger(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']))
@@ -148,9 +125,12 @@ class RedditBot():
 			# iterate through all the recent posts
 			while si >= 0:
 				# if author is already accepted, skip it
-				if users[si].name in self.acceptedUsers:
+				self.acceptedUsers.acquireLock()
+				if users[si].name.lower() in self.acceptedUsers.getList():
+					self.acceptedUsers.releaseLock()
 					si -= 1
 					continue
+				self.acceptedUsers.releaseLock()
 				# if author is already being watched, reset their refresh counter
 				if users[si].name in self.redditCache[1]:
 					userIndex = self.redditCache[1].index(users[si].name)
@@ -212,7 +192,9 @@ class RedditBot():
 						self.logger.info("CONGRATULATIONS!! " + usr + " is qualified to join!")
 						# Add user to queue so discord side can announce it
 						self.acceptQueue.put(usr)
-						self.acceptedUsers.append(usr)
+						self.acceptedUsers.acquireLock()
+						self.acceptedUsers.getList().append(usr.lower())
+						self.acceptedUsers.releaseLock()
 						self.redditCache[1].pop(u)
 						self.redditCache[2].pop(u)
 					else:
@@ -223,40 +205,22 @@ class RedditBot():
 						else:
 							u += 1
 			# Write the (hopefully changed) accepted users list
-			writeAcceptedUsers(self.acceptedUsers)
+			self.acceptedUsers.acquireLock()
+			writeAcceptedUsers(self.acceptedUsers.getList())
+			self.acceptedUsers.releaseLock()
 			writeUserCache(self.redditCache)
 			endTime = time.time()
 			await asyncio.sleep(checkTime(self.SNOOPSNOO_REFRESH_RATE, startTime - endTime, "async_checkUsers"))
-	
-	# Async - adds users from the ignore queue
-	async def async_ignore(self):
-		await asyncio.sleep(self.QUEUE_POLL_RATE)
-		while not self.gracefulExit:
-			startTime = time.time()
-			# remove from self.manualQueue until empty
-			while not self.manualQueue.empty():
-				newUser = self.manualQueue.get()
-				self.logger.info("ignoring another user: "+newUser)
-				self.acceptedUsers.append(newUser)
-				if newUser in self.redditCache[1]:
-					idx = self.redditCache[1].index(newUser)
-					self.redditCache[1].pop(idx)
-					self.redditCache[2].pop(idx)
-			writeAcceptedUsers(self.acceptedUsers)
-			writeUserCache(self.redditCache)
-			endTime = time.time()
-			await asyncio.sleep(checkTime(self.QUEUE_POLL_RATE, startTime - endTime, "async_ignore"))
 	
 	# Async - checks for exit conditions and prepares to stop
 	async def async_checkExit(self):
 		await asyncio.sleep(self.EXIT_POLL_RATE)
 		while not self.gracefulExit:
-			ge = parseFile("closegracefully.txt", False)
+			ge = FileParser.parseFile("closegracefully.txt", False)
 			if ge[0] != "no":
 				self.logger.info("Reddit process is shutting down now")
-				self.acceptQueue.put(None)
+				self.postQueue.put(None)
 				self.gracefulExit = True
-				self.acceptQueue.close()
 				self.postQueue.close()
 				break
 			await asyncio.sleep(self.EXIT_POLL_RATE)
@@ -270,15 +234,14 @@ class RedditBot():
 		tasks.append(asyncio.ensure_future(self.async_newUsers()))
 		tasks.append(asyncio.ensure_future(self.async_topPosts()))
 		tasks.append(asyncio.ensure_future(self.async_checkUsers()))
-		tasks.append(asyncio.ensure_future(self.async_ignore()))
 		tasks.append(asyncio.ensure_future(self.async_checkExit()))
 		# Quit as soon as one returns (the checkExit), don't care about results
 		done, notdone = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 		for t in notdone:
 			t.cancel()
 
-def initBotAndRun(queueList, config):
-	rb = RedditBot(queueList, config)
+def initBotAndRun(queueList, config, usrlist):
+	rb = RedditBot(queueList, config, usrlist)
 	loop = asyncio.get_event_loop()
 	try:
 		loop.run_until_complete(rb.run())

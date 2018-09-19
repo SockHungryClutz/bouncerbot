@@ -101,16 +101,16 @@ class SnoopSnooAPI():
 	@staticmethod
 	async def async_refreshSnoop(user):
 		async with aiohttp.ClientSession() as ses:
-			upd = await SnoopSnooAPI.async_post(ses, "https://sender.blockspring.com/api_v2/blocks/d03751d846a6a0ff9a6dfd36b9c1c641?api_key=d1b2e14d5b005465cfe3c83976a9240a", data={"username" : user, "json_data" : ""})
-			idx = upd.find('"_errors":[{')
+			res = await SnoopSnooAPI.async_post(ses, "https://sender.blockspring.com/api_v2/blocks/d03751d846a6a0ff9a6dfd36b9c1c641?api_key=d1b2e14d5b005465cfe3c83976a9240a", data={"username" : user, "json_data" : ""})
+			idx = res.find('"_errors":[{')
 			if idx != -1:
 				return ("error getting user: " + user)
-			idx = upd.find('"results":')
-			upd = upd[idx+11:-2]
+			idx = res.find('"results":')
+			upd = res[idx+11:-2]
 			try:
 				jd = SnoopSnooAPI.jsonStrToObj(upd)
 			except Exception as e:
-				return str(e)
+				return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + res
 			# this must be done synchronously since the old version of aiohttp used by the
 			# the old version of discord.py doesn't support json POST
 			r2 = requests.post("https://snoopsnoo.com/update",json=jd)
