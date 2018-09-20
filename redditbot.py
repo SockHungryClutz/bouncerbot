@@ -106,6 +106,11 @@ class RedditBot():
 					if post.id == self.redditCache[0][0]:
 						foundLatest = True
 						break
+					# don't keep going if the post is older than 1H 5M
+					# prevent long loads and getting stuck on removed posts
+					if startTime - int(post.created_utc) >= 3900:
+						foundLatest = True
+						break
 					if si == 0:
 						if lastSubmission == "0":
 							# don't break, 
