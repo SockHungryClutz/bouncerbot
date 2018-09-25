@@ -12,14 +12,13 @@ import asyncio
 import configparser
 import time
 from datetime import datetime
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Manager
 import redditbot
 from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger
 from FileParser import FileParser
-from LockedList import LockedList
 
-VERSION = '1.1.2'
+VERSION = '1.1.4'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)')
 
@@ -37,8 +36,8 @@ REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
 realCleanShutDown = False
 p = None
 
-# Init a locked list to use later
-acceptedusers = LockedList(FileParser.parseFile("acceptedusers.txt", False))
+# Iget the accepted users list
+aul = FileParser.parseFile("acceptedusers.txt", False)
 
 # Create the queues the processes will use to communicate
 newUserQueue = Queue()
@@ -69,7 +68,7 @@ def findChannel(chnl):
 				foundChannel = channel.id
 				channelCache[chnl] = channel.id
 	return foundChannel
-	
+
 # Whether or not a user is qualified to join
 def isQualified(subKarma, comKarma):
 	if comKarma > MAX_COMMENT_KARMA:
@@ -81,7 +80,6 @@ def isQualified(subKarma, comKarma):
 # Checks post and user queues from the reddit side, messaging when any are ready
 async def check_queues():
 	await bot.wait_until_ready()
-	await bot.change_presence(game=discord.Game(name='b.help for commands', type=1))
 	while not bot.is_closed:
 		closeDiscord = False
 		while not newUserQueue.empty():
@@ -91,6 +89,7 @@ async def check_queues():
 			snoopurl = "https://snoopsnoo.com/u/" + newUsr
 			msg = newUsr + " is now eligible for entry! :grinning:\n" + redditurl + "\n" + snoopurl
 			await bot.send_message(bot.get_channel(findChannel(config['general']['user_announce_channel'])), content=msg, embed=None)
+		await asyncio.sleep(queuePoll)
 		while not newPostQueue.empty():
 			newPost = newPostQueue.get()
 			if newPost == None:
@@ -110,6 +109,7 @@ async def check_queues():
 
 @bot.event
 async def on_ready():
+	await bot.change_presence(game=discord.Game(name='b.help for commands', type=1))
 	logger.info('Discord log in success!')
 
 @bot.command()
@@ -180,11 +180,9 @@ async def check(*args):
 		await bot.say(embed=embd)
 		
 		# Check if the user is able to join now, and add to queue if they are
-		acceptedusers.acquireLock()
-		if(isQualified(firlK, firlC) and not (name.lower() in acceptedusers.getList())):
-			acceptedusers.getList().append(name.lower())
+		if(isQualified(firlK, firlC) and not (name.lower() in acceptedusers)):
+			acceptedusers.append(name.lower())
 			newUserQueue.put(name)
-		acceptedusers.releaseLock()
 
 @bot.command(pass_context=True)
 async def ignore(ctx, *args):
@@ -194,25 +192,34 @@ async def ignore(ctx, *args):
 	else:
 		logger.info("b.ignore called: "+args[0])
 		if ctx.message.author.top_role.permissions.manage_channels:
-			#manualAddQueue.put(args[0])
-			acceptedusers.acquireLock()
-			acceptedusers.getList().append(args[0].lower())
-			acceptedusers.releaseLock()
+			acceptedusers.append(args[0].lower())
 			await bot.say(args[0] + " will be ignored by this bot :thumbsup:")
 		else:
 			await bot.say("Sorry, you can't use this command! :confused:")
 
 if __name__ == '__main__':
 	print("BouncerBot : " + VERSION + "\nCreated by SockHungryClutz for the Furry Shitposting Guild\n(All further non-error messages will be output to logs)")
+	# Create the shared list between the processes
+	man = Manager()
+	acceptedusers = man.list(aul)
+	
 	# Create the reddit bot and spin it off to a subprocess before starting discord
 	p = Process(target=makeRedditBot, args=(config, queueList, acceptedusers,))
 	p.start()
 	
 	# Finally, run the discord bot
-	bot.loop.create_task(check_queues())
+	theLoop = bot.loop
+	theLoop.create_task(check_queues())
 	# Work around discord heartbeat timeouts on lesser hardware (raspberry pi)
 	while not realCleanShutDown:
+		# Hack, thanks Hornwitser
+		if bot.is_closed:
+			logger.warning("Bot closed, attempting reconnect...")
+			bot._closed.clear()
+			bot.http.recreate()
 		try:
-			bot.run(token)
-		except BaseException:
-			time.sleep(5)
+			theLoop.run_until_complete(bot.start(token))
+		except BaseException as e:
+			logger.warning("Discord connection reset:\n" + str(e))
+			time.sleep(60)
+	theLoop.close()

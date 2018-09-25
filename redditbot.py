@@ -46,7 +46,7 @@ class RedditBot():
 		# then a line of number of days left to track each user
 		self.acceptedUsers = usrlist
 		self.redditCache = FileParser.parseFile("redditcache.txt", True)
-
+		
 		self.r = praw.Reddit(client_id=config['reddit_creds']['client_id'],
 							client_secret=config['reddit_creds']['client_secret'],
 							user_agent=config['reddit_creds']['user_agent'])
@@ -62,7 +62,7 @@ class RedditBot():
 		
 		self.acceptQueue = queueList[0]
 		self.postQueue = queueList[1]
-
+		
 		# Start the logger
 		self.logger = RollingLogger(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']))
 		
@@ -130,12 +130,9 @@ class RedditBot():
 			# iterate through all the recent posts
 			while si >= 0:
 				# if author is already accepted, skip it
-				self.acceptedUsers.acquireLock()
-				if users[si].name.lower() in self.acceptedUsers.getList():
-					self.acceptedUsers.releaseLock()
+				if users[si].name.lower() in self.acceptedUsers:
 					si -= 1
 					continue
-				self.acceptedUsers.releaseLock()
 				# if author is already being watched, reset their refresh counter
 				if users[si].name in self.redditCache[1]:
 					userIndex = self.redditCache[1].index(users[si].name)
@@ -197,9 +194,7 @@ class RedditBot():
 						self.logger.info("CONGRATULATIONS!! " + usr + " is qualified to join!")
 						# Add user to queue so discord side can announce it
 						self.acceptQueue.put(usr)
-						self.acceptedUsers.acquireLock()
-						self.acceptedUsers.getList().append(usr.lower())
-						self.acceptedUsers.releaseLock()
+						self.acceptedUsers.append(usr.lower())
 						self.redditCache[1].pop(u)
 						self.redditCache[2].pop(u)
 					else:
@@ -210,9 +205,7 @@ class RedditBot():
 						else:
 							u += 1
 			# Write the (hopefully changed) accepted users list
-			self.acceptedUsers.acquireLock()
-			writeAcceptedUsers(self.acceptedUsers.getList())
-			self.acceptedUsers.releaseLock()
+			writeAcceptedUsers(self.acceptedUsers)
 			writeUserCache(self.redditCache)
 			endTime = time.time()
 			await asyncio.sleep(checkTime(self.SNOOPSNOO_REFRESH_RATE, startTime - endTime, "async_checkUsers"))
