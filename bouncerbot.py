@@ -18,7 +18,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger
 from FileParser import FileParser
 
-VERSION = '1.1.4'
+VERSION = '1.1.4a'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)')
 
@@ -78,10 +78,9 @@ def isQualified(subKarma, comKarma):
 	return (subKarma + c >= REQUIRED_KARMA_TOTAL)
 
 # Checks post and user queues from the reddit side, messaging when any are ready
-async def check_queues():
+async def check_user_queue():
 	await bot.wait_until_ready()
 	while not bot.is_closed:
-		closeDiscord = False
 		while not newUserQueue.empty():
 			newUsr = newUserQueue.get()
 			logger.info("new user accepted: "+newUsr)
@@ -90,6 +89,11 @@ async def check_queues():
 			msg = newUsr + " is now eligible for entry! :grinning:\n" + redditurl + "\n" + snoopurl
 			await bot.send_message(bot.get_channel(findChannel(config['general']['user_announce_channel'])), content=msg, embed=None)
 		await asyncio.sleep(queuePoll)
+
+async def check_post_queue():
+	await bot.wait_until_ready()
+	while not bot.is_closed:
+		closeDiscord = False
 		while not newPostQueue.empty():
 			newPost = newPostQueue.get()
 			if newPost == None:
@@ -209,7 +213,8 @@ if __name__ == '__main__':
 	
 	# Finally, run the discord bot
 	theLoop = bot.loop
-	theLoop.create_task(check_queues())
+	theLoop.create_task(check_user_queue())
+	theLoop.create_task(check_post_queue())
 	# Work around discord heartbeat timeouts on lesser hardware (raspberry pi)
 	while not realCleanShutDown:
 		# Hack, thanks Hornwitser
@@ -221,5 +226,6 @@ if __name__ == '__main__':
 			theLoop.run_until_complete(bot.start(token))
 		except BaseException as e:
 			logger.warning("Discord connection reset:\n" + str(e))
+		finally:
 			time.sleep(60)
 	theLoop.close()
