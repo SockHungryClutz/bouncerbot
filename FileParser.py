@@ -24,3 +24,21 @@ class FileParser():
 	def writeFile(filename, content, mode):
 		with open(filename, mode) as f:
 			f.write(content)
+	
+	@staticmethod
+	# Writes an entire list to a file
+	def writeList(filename, lst, mode):
+		ostr = ""
+		for n in lst:
+			ostr += n + '\n'
+		FileParser.writeFile(filename, ostr, mode)
+	
+	@staticmethod
+	# Writes a nested list to file
+	def writeNestedList(filename, lst, mode):
+		ostr = ""
+		for n in lst:
+			for o in n:
+				ostr += o + ' '
+			ostr += '\n'
+		FileParser.writeFile(filename, ostr, mode)

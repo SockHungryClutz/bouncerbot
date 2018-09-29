@@ -18,7 +18,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger
 from FileParser import FileParser
 
-VERSION = '1.1.4a'
+VERSION = '1.2.1'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)')
 
@@ -36,8 +36,11 @@ REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
 realCleanShutDown = False
 p = None
 
-# Iget the accepted users list
+# Get the accepted users list
 aul = FileParser.parseFile("acceptedusers.txt", False)
+
+# Mapping of reddit usernames to discord id's
+userMap = FileParser.parseFile("usermap.txt", True)
 
 # Create the queues the processes will use to communicate
 newUserQueue = Queue()
@@ -100,7 +103,13 @@ async def check_post_queue():
 				closeDiscord = True
 				continue
 			logger.info("added post: "+newPost[0]+' ; '+newPost[1]+' ; '+newPost[2])
-			msg = "user: " + newPost[0] + "\ncontent: " + newPost[1] + "\npost: " + newPost[2]
+			if newPost[0].lower() in userMap[0]:
+				uidx = userMap[0].index(newPost[0].lower())
+				duser = await bot.get_user_info(userMap[1][uidx])
+				realuser = duser.mention + " (" + newPost[0] + ")"
+			else:
+				realuser = newPost[0]
+			msg = "user: " + realuser + "\ncontent: " + newPost[1] + "\npost: " + newPost[2]
 			await bot.send_message(bot.get_channel(findChannel(config['general']['post_announce_channel'])), content=msg, embed=None)
 		if closeDiscord:
 			# all other queues should be closed by the reddit side
@@ -191,15 +200,73 @@ async def check(*args):
 @bot.command(pass_context=True)
 async def ignore(ctx, *args):
 	"""Manually specify a reddit user for this bot to ignore (mods only)"""
-	if len(args) <= 0:
-		await bot.say("You need to specify a reddit user!\neg. `b.ignore SimStart`")
-	else:
-		logger.info("b.ignore called: "+args[0])
-		if ctx.message.author.top_role.permissions.manage_channels:
+	if ctx.message.author.top_role.permissions.manage_channels:
+		if len(args) <= 0:
+			await bot.say("You need to specify a reddit user!\neg. `b.ignore SimStart`")
+		else:
+			logger.info("b.ignore called: "+args[0])
 			acceptedusers.append(args[0].lower())
 			await bot.say(args[0] + " will be ignored by this bot :thumbsup:")
+	else:
+		await bot.say("Sorry, you can't use this command! :confused:")
+
+@bot.group(pass_context=True)
+async def ping(ctx):
+	"""Set up username pings for #top-posts-of-day"""
+	if ctx.invoked_subcommand is None:
+		await bot.say("Invalid command! use `b.ping user <@discord> <redditname>` or `b.ping me <redditname>`")
+
+@ping.command(pass_context=True)
+async def user(ctx,member: discord.Member=None,redditname: str=None):
+	"""Associate a discord user to a reddit username (mods only)"""
+	if ctx.message.author.top_role.permissions.manage_channels:
+		if member is None or redditname is None:
+			await bot.say("You need to specify both a Discord user and a reddit username,\neg. `b.ping user @SimStart SimStart`")
 		else:
-			await bot.say("Sorry, you can't use this command! :confused:")
+			logger.info("b.ping user called: "+member.id+" ; "+redditname)
+			if not redditname.lower() in acceptedusers:
+				await bot.say("Couldn't find '"+redditname+"' in accepted users, are you sure their name is spelled correctly?")
+			else:
+				userMap[0].append(redditname.lower())
+				userMap[1].append(member.id)
+				FileParser.writeNestedList("usermap.txt", userMap, 'w')
+				await bot.say("Added "+redditname+" to the ping list :thumbsup:")
+	else:
+		await bot.say("Sorry, you can't use this command! :confused:")
+
+@ping.command(pass_context=True)
+async def me(ctx, redditname: str=None):
+	"""Associate a reddit username to your discord name"""
+	if redditname is None:
+		await bot.say("You need to specify a reddit username,\neg. `b.ping me SimStart`")
+	else:
+		logger.info("b.ping me called: "+ctx.message.author.id+" ; "+redditname)
+		if not redditname.lower() in acceptedusers:
+			await bot.say("Couldn't find '"+redditname+"' in accepted users, are you sure their name is spelled correctly?")
+		else:
+			userMap[0].append(redditname.lower())
+			userMap[1].append(ctx.message.author.id)
+			FileParser.writeNestedList("usermap.txt", userMap, 'w')
+			await bot.say("Added "+redditname+" to the ping list :thumbsup:")
+
+@ping.command(pass_context=True)
+async def remove(ctx,redditname: str=None):
+	"""Remove all associations used for a reddit user (mods only)"""
+	if ctx.message.author.top_role.permissions.manage_channels:
+		if redditname is None:
+			await bot.say("You need to specify a reddit username,\neg. `b.ping remove SimStart`")
+		else:
+			logger.info("b.ping remove called: "+redditname)
+			num = 0
+			while redditname.lower() in userMap[0]:
+				idx = userMap[0].index(redditname.lower())
+				userMap[0].pop(idx)
+				userMap[1].pop(idx)
+				num += 1
+			FileParser.writeNestedList("usermap.txt", userMap, 'w')
+			await bot.say("Removed "+str(num)+" instances of "+redditname+" from the ping list :thumbsup:")
+	else:
+		await bot.say("Sorry, you can't use this command! :confused:")
 
 if __name__ == '__main__':
 	print("BouncerBot : " + VERSION + "\nCreated by SockHungryClutz for the Furry Shitposting Guild\n(All further non-error messages will be output to logs)")

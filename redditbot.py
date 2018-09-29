@@ -7,27 +7,6 @@ from RollingLogger import RollingLogger
 from FileParser import FileParser
 
 # Define Helper Functions
-# Writes the usercache out to file
-def writeUserCache(uc):
-	ostr = uc[0][0] + '\n'
-	for ustr in uc[1]:
-		ostr += ustr + ' '
-	ostr += '\n'
-	for cstr in uc[2]:
-		ostr += cstr + ' '
-	ostr += '\n'
-	for pstr in uc[3]:
-		ostr += pstr + ' '
-	ostr += '\n'
-	FileParser.writeFile("redditcache.txt", ostr, 'w')
-
-# Writes the accepted users list out to file
-def writeAcceptedUsers(au):
-	ostr = ""
-	for usr in au:
-		ostr += usr + '\n'
-	FileParser.writeFile("acceptedusers.txt", ostr, 'w')
-
 # Manages how long each task should sleep, posting a warning if a task takes too long
 def checkTime(atime, btime, cr):
 	sleeptime = atime - btime
@@ -149,7 +128,7 @@ class RedditBot():
 				si -= 1
 			# Write out the user cache
 			self.redditCache[0][0] = lastSubmission
-			writeUserCache(self.redditCache)
+			FileParser.writeNestedList("redditcache.txt", self.redditCache, 'w')
 			
 			# keep the pace
 			endTime = time.time()
@@ -172,7 +151,7 @@ class RedditBot():
 					l = len(self.redditCache[3])
 					if l >= 40:
 						self.redditCache[3] = self.redditCache[3][l-30:]
-			writeUserCache(self.redditCache)
+			FileParser.writeNestedList("redditcache.txt", self.redditCache, 'w')
 			endTime = time.time()
 			await asyncio.sleep(checkTime(self.TOP_REFRESH_RATE, startTime - endTime, "async_topPosts"))
 	
@@ -205,8 +184,8 @@ class RedditBot():
 						else:
 							u += 1
 			# Write the (hopefully changed) accepted users list
-			writeAcceptedUsers(self.acceptedUsers)
-			writeUserCache(self.redditCache)
+			FileParser.writeList("acceptedusers.txt", self.acceptedUsers, 'w')
+			FileParser.writeNestedList("redditcache.txt", self.redditCache, 'w')
 			endTime = time.time()
 			await asyncio.sleep(checkTime(self.SNOOPSNOO_REFRESH_RATE, startTime - endTime, "async_checkUsers"))
 	
