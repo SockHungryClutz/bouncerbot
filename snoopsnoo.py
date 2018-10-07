@@ -64,14 +64,20 @@ class SnoopSnooAPI():
 	# Async - http get, but async
 	@staticmethod
 	async def async_get(ses, url):
-		async with ses.get(url) as resp:
-			return await resp.text()
+		try:
+			async with ses.get(url) as resp:
+				return await resp.text()
+		except:
+			return '{"_errors":[{"1":"aiohttp fail - get"}]}'
 	
 	# Async - http post, also async
 	@staticmethod
 	async def async_post(ses, url, data):
-		async with ses.post(url, data=data) as resp:
-			return await resp.text()
+		try:
+			async with ses.post(url, data=data) as resp:
+				return await resp.text()
+		except:
+			return '{"_errors":[{"1":"aiohttp fail - post"}]}'
 	
 	# Async - async version of getUserJSON
 	@staticmethod

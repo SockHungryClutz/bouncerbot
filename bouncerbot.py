@@ -18,7 +18,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger
 from FileParser import FileParser
 
-VERSION = '1.2.1'
+VERSION = '1.2.2'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)')
 
