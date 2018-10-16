@@ -18,7 +18,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger
 from FileParser import FileParser
 
-VERSION = '1.2.2'
+VERSION = '1.2.3'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)')
 
@@ -80,6 +80,10 @@ def isQualified(subKarma, comKarma):
 		c = comKarma
 	return (subKarma + c >= REQUIRED_KARMA_TOTAL)
 
+# Escapes underscores in usernames to prevent weird italics
+def fixUsername(name):
+	return name.replace('_','\_')
+
 # Checks post and user queues from the reddit side, messaging when any are ready
 async def check_user_queue():
 	await bot.wait_until_ready()
@@ -89,7 +93,7 @@ async def check_user_queue():
 			logger.info("new user accepted: "+newUsr)
 			redditurl = "https://www.reddit.com/u/" + newUsr
 			snoopurl = "https://snoopsnoo.com/u/" + newUsr
-			msg = newUsr + " is now eligible for entry! :grinning:\n" + redditurl + "\n" + snoopurl
+			msg = fixUsername(newUsr) + " is now eligible for entry! :grinning:\n" + redditurl + "\n" + snoopurl
 			await bot.send_message(bot.get_channel(findChannel(config['general']['user_announce_channel'])), content=msg, embed=None)
 		await asyncio.sleep(queuePoll)
 
@@ -106,9 +110,9 @@ async def check_post_queue():
 			if newPost[0].lower() in userMap[0]:
 				uidx = userMap[0].index(newPost[0].lower())
 				duser = await bot.get_user_info(userMap[1][uidx])
-				realuser = duser.mention + " (" + newPost[0] + ")"
+				realuser = duser.mention + " (" + fixUsername(newPost[0]) + ")"
 			else:
-				realuser = newPost[0]
+				realuser = fixUsername(newPost[0])
 			msg = "user: " + realuser + "\ncontent: " + newPost[1] + "\npost: " + newPost[2]
 			await bot.send_message(bot.get_channel(findChannel(config['general']['post_announce_channel'])), content=msg, embed=None)
 		if closeDiscord:
@@ -158,7 +162,7 @@ async def check(*args):
 				needRefresh = True
 		if needRefresh:
 			logger.info("user needed refresh...")
-			await bot.say("Give me a minute while I refresh " + args[0] + "'s profile...")
+			await bot.say("Give me a minute while I refresh " + fixUsername(args[0]) + "'s profile...")
 			ref = await SnoopSnooAPI.async_refreshSnoop(args[0])
 			if ref == "OK":
 				# all is good, get the new user info
@@ -171,7 +175,7 @@ async def check(*args):
 			else:
 				# something went wrong, say something and return
 				logger.warning("refresh error: " + ref)
-				return await bot.say("Error getting info on " + args[0] + ", are you sure the user exists?")
+				return await bot.say("Error getting info on " + fixUsername(args[0]) + ", are you sure the user exists?")
 		try:
 			updTime = usr['data']['metadata']['last_updated']
 			name = usr['data']['username']
@@ -186,7 +190,7 @@ async def check(*args):
 			# probably couldn't find the subreddit, all's good, just pass
 			pass
 		# Build the response embed
-		embd = discord.Embed(title="Overview for " + name, description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
+		embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
 		embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
 		embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)
 		embd.add_field(name="Last Refreshed: ", value=updTime, inline=True)
@@ -230,7 +234,7 @@ async def user(ctx,member: discord.Member=None,redditname: str=None):
 				userMap[0].append(redditname.lower())
 				userMap[1].append(member.id)
 				FileParser.writeNestedList("usermap.txt", userMap, 'w')
-				await bot.say("Added "+redditname+" to the ping list :thumbsup:")
+				await bot.say("Added "+fixUsername(redditname)+" to the ping list :thumbsup:")
 	else:
 		await bot.say("Sorry, you can't use this command! :confused:")
 
@@ -247,7 +251,7 @@ async def me(ctx, redditname: str=None):
 			userMap[0].append(redditname.lower())
 			userMap[1].append(ctx.message.author.id)
 			FileParser.writeNestedList("usermap.txt", userMap, 'w')
-			await bot.say("Added "+redditname+" to the ping list :thumbsup:")
+			await bot.say("Added "+fixUsername(redditname)+" to the ping list :thumbsup:")
 
 @ping.command(pass_context=True)
 async def remove(ctx,redditname: str=None):
@@ -264,7 +268,7 @@ async def remove(ctx,redditname: str=None):
 				userMap[1].pop(idx)
 				num += 1
 			FileParser.writeNestedList("usermap.txt", userMap, 'w')
-			await bot.say("Removed "+str(num)+" instances of "+redditname+" from the ping list :thumbsup:")
+			await bot.say("Removed "+str(num)+" instances of "+fixUsername(redditname)+" from the ping list :thumbsup:")
 	else:
 		await bot.say("Sorry, you can't use this command! :confused:")
 
