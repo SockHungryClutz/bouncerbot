@@ -72,6 +72,7 @@ class RedditBot():
 		while not self.gracefulExit:
 			# time how long a cycle takes so it always starts at the right time
 			startTime = time.time()
+			wasChanged = False
 			n = 25
 			si = 0
 			newPosts = self.sr.new(limit=n)
@@ -114,6 +115,7 @@ class RedditBot():
 					continue
 				# if author is already being watched, reset their refresh counter
 				if users[si].name in self.redditCache[1]:
+					wasChanged = True
 					userIndex = self.redditCache[1].index(users[si].name)
 					self.redditCache[2][userIndex] = self.CYCLES_IN_REVIEW
 					si -= 1
@@ -123,12 +125,15 @@ class RedditBot():
 					si -= 1
 					continue
 				# author not found elsewhere and passes sanity checks, add them to list
+				wasChanged = True
 				self.redditCache[1].append(users[si].name)
 				self.redditCache[2].append(self.CYCLES_IN_REVIEW)
 				si -= 1
 			# Write out the user cache
+			wasChanged = wasChanged or (self.redditCache[0][0] != lastSubmission)
 			self.redditCache[0][0] = lastSubmission
-			FileParser.writeNestedList("redditcache.txt", self.redditCache, 'w')
+			if wasChanged:
+				FileParser.writeNestedList("redditcache.txt", self.redditCache, 'w')
 			
 			# keep the pace
 			endTime = time.time()
@@ -139,10 +144,12 @@ class RedditBot():
 		await asyncio.sleep(self.TOP_REFRESH_RATE)
 		while not self.gracefulExit:
 			startTime = time.time()
+			wasChanged = False
 			self.logger.info("Refreshing top 10 posts...")
 			topPosts = self.sr.top('day', limit=10)
 			for post in topPosts:
 				if not post.id in self.redditCache[3]:
+					wasChanged = True
 					self.redditCache[3].append(str(post.id))
 					if post.over_18:
 						self.postQueue.put([post.author.name, '<'+post.url+'> **NSFW**', '<'+post.shortlink+'> **NSFW**'])
@@ -151,7 +158,8 @@ class RedditBot():
 					l = len(self.redditCache[3])
 					if l >= 40:
 						self.redditCache[3] = self.redditCache[3][l-30:]
-			FileParser.writeNestedList("redditcache.txt", self.redditCache, 'w')
+			if wasChanged:
+				FileParser.writeNestedList("redditcache.txt", self.redditCache, 'w')
 			endTime = time.time()
 			await asyncio.sleep(checkTime(self.TOP_REFRESH_RATE, startTime - endTime, "async_topPosts"))
 	
@@ -160,6 +168,7 @@ class RedditBot():
 		await asyncio.sleep(self.SNOOPSNOO_REFRESH_RATE)
 		while not self.gracefulExit:
 			startTime = time.time()
+			wasChanged = False
 			self.logger.info("Time to refresh SnoopSnoo for " + str(len(self.redditCache[1])) + " users...")
 			u = 0
 			while u < len(self.redditCache[1]):
@@ -170,6 +179,7 @@ class RedditBot():
 					u += 1
 				else:
 					if await self.async_isQualifiedSnoop(usr):
+						wasChanged = True
 						self.logger.info("CONGRATULATIONS!! " + usr + " is qualified to join!")
 						# Add user to queue so discord side can announce it
 						self.acceptQueue.put(usr)
@@ -184,7 +194,8 @@ class RedditBot():
 						else:
 							u += 1
 			# Write the (hopefully changed) accepted users list
-			FileParser.writeList("acceptedusers.txt", self.acceptedUsers, 'w')
+			if wasChanged:
+				FileParser.writeList("acceptedusers.txt", self.acceptedUsers, 'w')
 			FileParser.writeNestedList("redditcache.txt", self.redditCache, 'w')
 			endTime = time.time()
 			await asyncio.sleep(checkTime(self.SNOOPSNOO_REFRESH_RATE, startTime - endTime, "async_checkUsers"))

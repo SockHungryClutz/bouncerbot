@@ -12,16 +12,16 @@ class RollingLogger:
 		self.logger.info(">Logger " + name + " initialized - " + str(datetime.now()) + "<")
 	
 	def debug(self, msg):
-		self.logger.debug("[" + str(datetime.now()) + "] *  " +msg)
+		self.logger.debug("[" + str(datetime.now()) + "] *   " +msg)
 	
 	def info(self, msg):
-		self.logger.info("[" + str(datetime.now()) + "]    " +msg)
+		self.logger.info("[" + str(datetime.now()) + "]     " +msg)
 	
 	def warning(self, msg):
-		self.logger.warning("[" + str(datetime.now()) + "] !  " +msg)
+		self.logger.warning("[" + str(datetime.now()) + "] !   " +msg)
 	
 	def error(self, msg):
-		self.logger.error("[" + str(datetime.now()) + "] !! " +msg)
+		self.logger.error("[" + str(datetime.now()) + "] !!  " +msg)
 	
 	def critical(self, msg):
-		self.logger.critical("[" + str(datetime.now()) + "] !!!" +msg)
+		self.logger.critical("[" + str(datetime.now()) + "] !!! " +msg)
