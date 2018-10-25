@@ -30,6 +30,7 @@ queuePoll = int(config['general']['discord_queue_poll'])
 logname = config['logging']['discord_log_name']
 filesizemax = int(config['logging']['max_file_size'])
 numlogsmax = int(config['logging']['max_number_logs'])
+logVerbosity = int(config['logging']['log_verbosity'])
 subreddit = config['general']['subreddit']
 MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
 REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
@@ -48,7 +49,7 @@ newPostQueue = Queue()
 queueList = [newUserQueue, newPostQueue]
 
 # Start the discord logger
-logger = RollingLogger(logname, filesizemax, numlogsmax)
+logger = RollingLogger(logname, filesizemax, numlogsmax, logVerbosity)
 
 # in all likelihood, this will only ever use a couple channels to talk
 # let's cache them in a dict to save a few cycles

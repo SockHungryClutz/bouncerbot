@@ -43,7 +43,7 @@ class RedditBot():
 		self.postQueue = queueList[1]
 		
 		# Start the logger
-		self.logger = RollingLogger(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']))
+		self.logger = RollingLogger(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']), int(config['logging']['log_verbosity']))
 		
 		self.gracefulExit = False
 		
