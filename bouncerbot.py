@@ -15,7 +15,7 @@ from datetime import datetime
 from multiprocessing import Process, Queue, Manager
 import redditbot
 from snoopsnoo import SnoopSnooAPI
-from RollingLogger import RollingLogger
+from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
 VERSION = '1.2.3'
@@ -49,7 +49,7 @@ newPostQueue = Queue()
 queueList = [newUserQueue, newPostQueue]
 
 # Start the discord logger
-logger = RollingLogger(logname, filesizemax, numlogsmax, logVerbosity)
+logger = RollingLogger_Async(logname, filesizemax, numlogsmax, logVerbosity)
 
 # in all likelihood, this will only ever use a couple channels to talk
 # let's cache them in a dict to save a few cycles
@@ -300,4 +300,5 @@ if __name__ == '__main__':
 			logger.warning("Discord connection reset:\n" + str(e))
 		finally:
 			time.sleep(60)
+	logger.closeLog()
 	theLoop.close()

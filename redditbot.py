@@ -3,7 +3,7 @@ import praw
 import time
 import asyncio
 from snoopsnoo import SnoopSnooAPI
-from RollingLogger import RollingLogger
+from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
 # Define Helper Functions
@@ -43,7 +43,7 @@ class RedditBot():
 		self.postQueue = queueList[1]
 		
 		# Start the logger
-		self.logger = RollingLogger(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']), int(config['logging']['log_verbosity']))
+		self.logger = RollingLogger_Async(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']), int(config['logging']['log_verbosity']))
 		
 		self.gracefulExit = False
 		
@@ -210,6 +210,7 @@ class RedditBot():
 				self.postQueue.put(None)
 				self.gracefulExit = True
 				self.postQueue.close()
+				self.logger.closeLog()
 				break
 			await asyncio.sleep(self.EXIT_POLL_RATE)
 	
