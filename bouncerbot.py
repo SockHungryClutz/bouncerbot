@@ -18,7 +18,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.2.3'
+VERSION = '1.3.0'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)')
 
@@ -27,6 +27,7 @@ config = configparser.ConfigParser()
 config.read('botconfig.ini')
 token = config['discord_creds']['token']
 queuePoll = int(config['general']['discord_queue_poll'])
+karmarefresh = int(config['general']['discord_karma_refresh'])
 logname = config['logging']['discord_log_name']
 filesizemax = int(config['logging']['max_file_size'])
 numlogsmax = int(config['logging']['max_number_logs'])
@@ -36,6 +37,9 @@ MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
 REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
 realCleanShutDown = False
 p = None
+
+# TODO: put this in the config or something
+roleList = ["An Old Tale", "Legend", "Journeyman", "Renowned", "Accepted", "Trusted", "Traveler", "Worker", "Wanderer"]
 
 # Get the accepted users list
 aul = FileParser.parseFile("acceptedusers.txt", False)
@@ -54,12 +58,14 @@ logger = RollingLogger_Async(logname, filesizemax, numlogsmax, logVerbosity)
 # in all likelihood, this will only ever use a couple channels to talk
 # let's cache them in a dict to save a few cycles
 channelCache = {}
+# same story for roles
+roleCache = {}
 
 # The process to create and run the reddit bot
 def makeRedditBot(configuration, queues, usrlist):
 	redditbot.initBotAndRun(queues, configuration, usrlist)
 
-# Send a message to a channel with a specific name
+# Find a channel with a specific name
 def findChannel(chnl):
 	global channelCache
 	foundChannel = None
@@ -71,7 +77,26 @@ def findChannel(chnl):
 			if channel.name == chnl:
 				foundChannel = channel.id
 				channelCache[chnl] = channel.id
+				break
 	return foundChannel
+
+# find the id of a role by name
+def findRole(role):
+	global roleCache
+	foundRole = None
+	try:
+		foundRole = roleCache[role]
+	except KeyError as e:
+		for server in bot.servers:
+			roles = server.role_hierarchy
+			for r in roles:
+				if r.name == role:
+					foundRole = r.id
+					roleCache[role] = r.id
+					break
+			if foundRole != None:
+				break
+	return foundRole
 
 # Whether or not a user is qualified to join
 def isQualified(subKarma, comKarma):
@@ -84,6 +109,66 @@ def isQualified(subKarma, comKarma):
 # Escapes underscores in usernames to prevent weird italics
 def fixUsername(name):
 	return name.replace('_','\_')
+
+# generic function to handle getting karma counts
+async def get_reddit_karma(name, silent):
+	usrS = await SnoopSnooAPI.async_getUserJSON(name)
+	usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
+	totalC = 0
+	totalS = 0
+	firlC = 0
+	firlK = 0
+	retstr = ""
+	needRefresh = False
+	try:
+		errCode = usr['error']
+		if errCode == 404:
+			# there was an error, try refreshing the user
+			needRefresh = True
+	except KeyError as e:
+		# this means that all's good, do the rest of the stuff
+		pass
+	# Check the time of the last refresh
+	if not needRefresh:
+		updTime = usr['data']['metadata']['last_updated']
+		uT = datetime.strptime(updTime, "%a, %d %b %Y %X %Z")
+		nT = datetime.utcnow()
+		dT = (nT - uT).total_seconds()
+		if dT >= 14400:
+			needRefresh = True
+	if needRefresh:
+		logger.info("user needed refresh...")
+		if not silent:
+			await bot.say("Give me a minute while I refresh " + fixUsername(name) + "'s profile...")
+		ref = await SnoopSnooAPI.async_refreshSnoop(name)
+		if ref == "OK":
+			# all is good, get the new user info
+			usrS = await SnoopSnooAPI.async_getUserJSON(name)
+			usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
+		elif ref.find("EXCEPTION") == 0:
+			# some server side exception, tell user not to panic
+			logger.warning("snoopsnoo error: " + ref)
+			retstr = "Oopsie Woopsie! SnoopSnoo made a little fucky wucky!\n(try again in a minute)"
+			return totalC, totalS, firlC, firlK, retstr
+		else:
+			# something went wrong, say something and return
+			logger.warning("refresh error: " + ref)
+			retstr = bot.say("Error getting info on " + fixUsername(name) + ", are you sure the user exists?"
+			return totalC, totalS, firlC, firlK, retstr
+	try:
+		updTime = usr['data']['metadata']['last_updated']
+		name = usr['data']['username']
+		totalC = usr['data']['summary']['comments']['all_time_karma']
+		totalS = usr['data']['summary']['submissions']['all_time_karma']
+		# async doesn't matter when string is provided
+		firl = SnoopSnooAPI.getSubredditActivity(args[0], subreddit, usrS)
+		if firl != None:
+			firlC = firl["comment_karma"]
+			firlK = firl["submission_karma"]
+	except KeyError as e:
+		# probably couldn't find the subreddit, all's good, just pass
+		pass
+	return totalC, totalS, firlC, firlK, retstr
 
 # Checks post and user queues from the reddit side, messaging when any are ready
 async def check_user_queue():
@@ -125,6 +210,42 @@ async def check_post_queue():
 		await asyncio.sleep(queuePoll)
 	await bot.logout()
 
+#refresh members' profiles every day, assign new roles
+async def refresh_user_karma():
+	await bot.wait_until_ready()
+	while not bot.is_closed:
+		i = 0
+		for usr in userMap[0]:
+			totalC, totalS, firlC, firlK, retmsg = await get_reddit_karma(usr, True)
+			subKarma = firlK + min(firlC, (firlK / 2))
+			if subKarma >= 155000:
+				rank = 0
+			elif subKarma >= 115000:
+				rank = 1
+			elif subKarma >= 80000:
+				rank = 2
+			elif subKarma >= 55000:
+				rank = 3
+			elif subKarma >= 35000:
+				rank = 4
+			elif subKarma >= 20000:
+				rank = 5
+			elif subKarma >= 10000:
+				rank = 6
+			elif subKarma >= 5000:
+				rank = 7
+			elif subKarma > 0:
+				rank = 8
+			else:
+				continue
+			await bot.add_roles(bot.get_member(userMap[1][i]), findRole(roleList[rank]))
+			# TODO: rankings (#1, #2, etc) based on karma?
+			userMap[2][i] = subKarma
+		userMap = sorted(userMap, key=lambda x: x[2])
+		FileParser.writeNestedList("usermap.txt", userMap, 'w')
+		await asyncio.sleep(karmarefresh)
+		
+
 @bot.event
 async def on_ready():
 	await bot.change_presence(game=discord.Game(name='b.help for commands', type=1))
@@ -136,71 +257,26 @@ async def check(*args):
 	if len(args) <= 0:
 		 await bot.say("You need to specify a reddit user!\neg. `b.check SimStart`")
 	else:
-		logger.info("check called: " + args[0])
-		usrS = await SnoopSnooAPI.async_getUserJSON(args[0])
-		usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
-		totalC = 0
-		totalS = 0
-		firlC = 0
-		firlK = 0
-		needRefresh = False
 		name = args[0]
-		try:
-			errCode = usr['error']
-			if errCode == 404:
-				# there was an error, try refreshing the user
-				needRefresh = True
-		except KeyError as e:
-			# this means that all's good, do the rest of the stuff
-			pass
-		# Check the time of the last refresh
-		if not needRefresh:
-			updTime = usr['data']['metadata']['last_updated']
-			uT = datetime.strptime(updTime, "%a, %d %b %Y %X %Z")
-			nT = datetime.utcnow()
-			dT = (nT - uT).total_seconds()
-			if dT >= 14400:
-				needRefresh = True
-		if needRefresh:
-			logger.info("user needed refresh...")
-			await bot.say("Give me a minute while I refresh " + fixUsername(args[0]) + "'s profile...")
-			ref = await SnoopSnooAPI.async_refreshSnoop(args[0])
-			if ref == "OK":
-				# all is good, get the new user info
-				usrS = await SnoopSnooAPI.async_getUserJSON(args[0])
-				usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
-			elif ref.find("EXCEPTION") == 0:
-				# some server side exception, tell user not to panic
-				logger.warning("snoopsnoo error: " + ref)
-				return await bot.say("Oopsie Woopsie! SnoopSnoo made a little fucky wucky!\n(try again in a minute)")
-			else:
-				# something went wrong, say something and return
-				logger.warning("refresh error: " + ref)
-				return await bot.say("Error getting info on " + fixUsername(args[0]) + ", are you sure the user exists?")
-		try:
-			updTime = usr['data']['metadata']['last_updated']
-			name = usr['data']['username']
-			totalC = usr['data']['summary']['comments']['all_time_karma']
-			totalS = usr['data']['summary']['submissions']['all_time_karma']
-			# async doesn't matter when string is provided
-			firl = SnoopSnooAPI.getSubredditActivity(args[0], subreddit, usrS)
-			if firl != None:
-				firlC = firl["comment_karma"]
-				firlK = firl["submission_karma"]
-		except KeyError as e:
-			# probably couldn't find the subreddit, all's good, just pass
-			pass
-		# Build the response embed
-		embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
-		embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
-		embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)
-		embd.add_field(name="Last Refreshed: ", value=updTime, inline=True)
-		await bot.say(embed=embd)
+		logger.info("check called: " + name)
+		usrS = await SnoopSnooAPI.async_getUserJSON(name)
+		usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
+		totalC, totalS, firlC, firlK, retmsg = await get_reddit_karma(name, False)
 		
-		# Check if the user is able to join now, and add to queue if they are
-		if(isQualified(firlK, firlC) and not (name.lower() in acceptedusers)):
-			acceptedusers.append(name.lower())
-			newUserQueue.put(name)
+		if retmsg != "":
+			return await bot.say(retmsg)
+		else:
+			# Build the response embed
+			embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
+			embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
+			embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)
+			embd.add_field(name="Last Refreshed: ", value=updTime, inline=True)
+			await bot.say(embed=embd)
+		
+			# Check if the user is able to join now, and add to queue if they are
+			if(isQualified(firlK, firlC) and not (name.lower() in acceptedusers)):
+				acceptedusers.append(name.lower())
+				newUserQueue.put(name)
 
 @bot.command(pass_context=True)
 async def ignore(ctx, *args):
@@ -287,6 +363,7 @@ if __name__ == '__main__':
 	theLoop = bot.loop
 	theLoop.create_task(check_user_queue())
 	theLoop.create_task(check_post_queue())
+	theLoop.create_task(refresh_user_karma())
 	# Work around discord heartbeat timeouts on lesser hardware (raspberry pi)
 	while not realCleanShutDown:
 		# Hack, thanks Hornwitser
