@@ -6,10 +6,10 @@ Helper bot for the Furry Shitposting Guild
 
 ## Requirements
 
-* [Python](https://www.python.org/downloads/release/python-366/) 3.4-3.6 (3.7+ will **NOT** work)  
+* [Python](https://www.python.org/downloads/release/python-366/) 3.4-3.6 (3.7+ **MIGHT** work)  
 * Use [pip](https://pypi.org/project/pip/) to install the following:  
   * [requests](https://pypi.org/project/requests/)  
-  * [discord.py](https://pypi.org/project/discord.py/) (**NOT** discord-rewrite)  
+  * [discord-rewrite](https://pypi.org/project/discord-rewrite/) (**NOT** discord.py)  
   * [praw](https://pypi.org/project/praw/)  
 * Everything else should be installed with the other packages
 
@@ -40,4 +40,5 @@ The bot will print a startup message, and all future messages will be logged as 
 
 * To stop, edit `closegracefully.txt` to say anything other than `no` with a new line (the new line MUST be included)  
 * To clear the reddit cache (only works between runs), edit `redditcache.txt` to have 5 blank lines, and put `0` on the first line  
+* Clearing the usermap can be done similarly, edit `usermap.txt` to have 3 blank lines
 * For all other support questions and concerns, please don't bother me
