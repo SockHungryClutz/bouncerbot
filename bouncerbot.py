@@ -27,9 +27,6 @@ VERSION = '1.3.0'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
-# So apparently the rewrite should have the bot as a subclass of bot...
-# TODO: the above
-
 # Read configuration
 config = configparser.ConfigParser()
 config.read('botconfig.ini')
@@ -96,24 +93,22 @@ def fixUsername(name):
 
 # Checks post and user queues from the reddit side, messaging when any are ready
 async def check_user_queue():
-	logger.info("Hewwo owo")
+	global realCleanShutDown
 	await bot.wait_until_ready()
-	while not bot.is_closed:
-		logger.info("checking new user queue...")
+	while not bot.is_closed() and not realCleanShutDown:
 		while not newUserQueue.empty():
 			newUsr = newUserQueue.get()
 			logger.info("new user accepted: "+newUsr)
 			redditurl = "https://www.reddit.com/u/" + newUsr
 			snoopurl = "https://snoopsnoo.com/u/" + newUsr
 			msg = fixUsername(newUsr) + " is now eligible for entry! :grinning:\n" + redditurl + "\n" + snoopurl
-			sendchannel = await bot.get_channel(findChannel(config['general']['user_announce_channel']))
-			await sendchannel.send(content=msg, embed=None)
+			await bot.get_channel(findChannel(config['general']['user_announce_channel'])).send(content=msg, embed=None)
 		await asyncio.sleep(queuePoll)
 
 async def check_post_queue():
+	global realCleanShutDown
 	await bot.wait_until_ready()
-	while not bot.is_closed:
-		logger.info("checking post queue...")
+	while not bot.is_closed() and not realCleanShutDown:
 		closeDiscord = False
 		while not newPostQueue.empty():
 			newPost = newPostQueue.get()
@@ -128,8 +123,7 @@ async def check_post_queue():
 			else:
 				realuser = fixUsername(newPost[0])
 			msg = "user: " + realuser + "\ncontent: " + newPost[1] + "\npost: " + newPost[2]
-			sendchannel = await bot.get_channel(findChannel(config['general']['post_announce_channel']))
-			await sendchannel.send(content=msg, embed=None)
+			await bot.get_channel(findChannel(config['general']['post_announce_channel'])).send(content=msg, embed=None)
 		if closeDiscord:
 			# all other queues should be closed by the reddit side
 			logger.info("Discord process is shutting down now")
@@ -137,10 +131,11 @@ async def check_post_queue():
 			p.join()
 			break
 		await asyncio.sleep(queuePoll)
+	await bot.logout()
 
 @bot.event
 async def on_ready():
-	await bot.change_presence(game=discord.Game(name='b.help for commands', type=1))
+	await bot.change_presence(activity=discord.Game(name='b.help for commands', type=1))
 	logger.info('Discord log in success!')
 
 # check that's pretty useful
@@ -152,7 +147,7 @@ async def is_admin(ctx):
 		return False
 
 @bot.command()
-async def checkUser(ctx, *args):
+async def check(ctx, *args):
 	"""Checks a reddit user's karma on furry_irl and in total"""
 	if len(args) <= 0:
 		 await ctx.send("You need to specify a reddit user!\neg. `b.check SimStart`")
@@ -306,20 +301,16 @@ if __name__ == '__main__':
 	theLoop.create_task(check_user_queue())
 	theLoop.create_task(check_post_queue())
 	# Work around discord heartbeat timeouts on lesser hardware (raspberry pi)
-	isFirstLoop = True
 	while not realCleanShutDown:
-		# Hack, thanks Hornwitser
-		if bot.is_closed and not isFirstLoop:
+		# Hopefully don't need to use a hack for this...
+		if bot.is_closed():
 			logger.warning("Bot closed, attempting reconnect...")
-			bot._closed.clear()
-			bot.http.recreate()
+			bot.clear()
 		try:
-			isFirstLoop = False
 			theLoop.run_until_complete(bot.start(token))
 		except BaseException as e:
 			logger.warning("Discord connection reset:\n" + str(e))
 		finally:
 			time.sleep(60)
-	theLoop.run_until_complete(bot.logout())
 	logger.closeLog()
 	theLoop.close()
