@@ -2,7 +2,7 @@
 # Made by SockHungryClutz
 #
 # To use:
-#   logger = RollingLogger_Sync(LogFileName(str), MaxLogFileSize(int), 
+#   logger = RollingLogger_Sync(LogFileName(str), MaxLogFileSize(int),
 #                               MaxNumberOfLogFiles(int), LoggingLevel(int))
 # From there, call logger.[debug/info/warning/error/critical](Message) to log
 # Use logger.closeLog() when closing to clean up everything else
@@ -120,32 +120,34 @@ class RollingLogger_Async:
 			self.nologs = True
 		else:
 			self.nologs = False
+			self.closed = False
 			self.logQueue = Queue()
 			self.p = Process(target=makeAsyncLogger, args=(name, fileSize, numFile, level, self.logQueue,))
 			self.p.start()
 			
 	def debug(self, msg):
-		if not self.nologs:
+		if not self.nologs and not self.closed:
 			self.logQueue.put("5[" + str(datetime.now()) + "] *   " +msg)
 	
 	def info(self, msg):
-		if not self.nologs:
+		if not self.nologs and not self.closed:
 			self.logQueue.put("4[" + str(datetime.now()) + "]     " +msg)
 	
 	def warning(self, msg):
-		if not self.nologs:
+		if not self.nologs and not self.closed:
 			self.logQueue.put("3[" + str(datetime.now()) + "] !   " +msg)
 	
 	def error(self, msg):
-		if not self.nologs:
+		if not self.nologs and not self.closed:
 			self.logQueue.put("2[" + str(datetime.now()) + "] !!  " +msg)
 	
 	def critical(self, msg):
-		if not self.nologs:
+		if not self.nologs and not self.closed:
 			self.logQueue.put("1[" + str(datetime.now()) + "] !!! " +msg)
 	
 	def closeLog(self):
-		if not self.nologs:
+		if not self.nologs and not self.closed:
+			self.closed = True
 			self.logQueue.put(None)
 			self.logQueue.close()
 			self.p.join()

@@ -79,6 +79,15 @@ class SnoopSnooAPI():
 		except:
 			return '{"_errors":[{"1":"aiohttp fail - post"}]}'
 	
+	# Async - json http post, also async
+	@staticmethod
+	async def async_post_json(ses, url, json):
+		try:
+			async with ses.post(url, json=json) as resp:
+				return await resp.text()
+		except:
+			return '{"_errors":[{"1":"aiohttp fail - post_json"}]}'
+	
 	# Async - async version of getUserJSON
 	@staticmethod
 	async def async_getUserJSON(user):
@@ -117,7 +126,4 @@ class SnoopSnooAPI():
 				jd = SnoopSnooAPI.jsonStrToObj(upd)
 			except Exception as e:
 				return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + res
-			# this must be done synchronously since the old version of aiohttp used by the
-			# the old version of discord.py doesn't support json POST
-			r2 = requests.post("https://snoopsnoo.com/update",json=jd)
-			return r2.text
+			return await SnoopSnooAPI.async_post_json(ses, "https://snoopsnoo.com/update", json=jd)
