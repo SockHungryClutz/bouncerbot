@@ -1,10 +1,15 @@
 """
 BouncerBot - Python bot to assist the Furry Shitposting Guild
-I wanted this to be 2-in-1 reddit and discord bot, and also have separate
-processes for both, but the discord bot doesn't lend itself well to being
-put inside a class and have dependencies like queues to talk to other 
-processes. As a compromise that I don't like, discord bot has the main
-process while reddit takes a separate process.
+Many months of weird optimizations led this to be a mess of processes that
+probably aren't necessary, so here's what they look like:
+(lines indicate interprocess communication)
+
+DiscordLogger                  RedditLogger
+     |                               |
+ DiscordBot -- SharedUserList -- RedditBot
+ 
+The discord and reddit bots are also async, meaning everything is a
+weird but efficient mess.
 """
 import discord
 from discord.ext import commands
@@ -18,9 +23,12 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.2.3'
+VERSION = '1.3.0'
 
-bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)')
+bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
+
+# So apparently the rewrite should have the bot as a subclass of bot...
+# TODO: the above
 
 # Read configuration
 config = configparser.ConfigParser()
@@ -49,7 +57,8 @@ newPostQueue = Queue()
 queueList = [newUserQueue, newPostQueue]
 
 # Start the discord logger
-logger = RollingLogger_Async(logname, filesizemax, numlogsmax, logVerbosity)
+# No wait, don't, it breaks on Windows
+logger = None
 
 # in all likelihood, this will only ever use a couple channels to talk
 # let's cache them in a dict to save a few cycles
@@ -87,20 +96,24 @@ def fixUsername(name):
 
 # Checks post and user queues from the reddit side, messaging when any are ready
 async def check_user_queue():
+	logger.info("Hewwo owo")
 	await bot.wait_until_ready()
 	while not bot.is_closed:
+		logger.info("checking new user queue...")
 		while not newUserQueue.empty():
 			newUsr = newUserQueue.get()
 			logger.info("new user accepted: "+newUsr)
 			redditurl = "https://www.reddit.com/u/" + newUsr
 			snoopurl = "https://snoopsnoo.com/u/" + newUsr
 			msg = fixUsername(newUsr) + " is now eligible for entry! :grinning:\n" + redditurl + "\n" + snoopurl
-			await bot.send_message(bot.get_channel(findChannel(config['general']['user_announce_channel'])), content=msg, embed=None)
+			sendchannel = await bot.get_channel(findChannel(config['general']['user_announce_channel']))
+			await sendchannel.send(content=msg, embed=None)
 		await asyncio.sleep(queuePoll)
 
 async def check_post_queue():
 	await bot.wait_until_ready()
 	while not bot.is_closed:
+		logger.info("checking post queue...")
 		closeDiscord = False
 		while not newPostQueue.empty():
 			newPost = newPostQueue.get()
@@ -115,7 +128,8 @@ async def check_post_queue():
 			else:
 				realuser = fixUsername(newPost[0])
 			msg = "user: " + realuser + "\ncontent: " + newPost[1] + "\npost: " + newPost[2]
-			await bot.send_message(bot.get_channel(findChannel(config['general']['post_announce_channel'])), content=msg, embed=None)
+			sendchannel = await bot.get_channel(findChannel(config['general']['post_announce_channel']))
+			await sendchannel.send(content=msg, embed=None)
 		if closeDiscord:
 			# all other queues should be closed by the reddit side
 			logger.info("Discord process is shutting down now")
@@ -123,18 +137,25 @@ async def check_post_queue():
 			p.join()
 			break
 		await asyncio.sleep(queuePoll)
-	await bot.logout()
 
 @bot.event
 async def on_ready():
 	await bot.change_presence(game=discord.Game(name='b.help for commands', type=1))
 	logger.info('Discord log in success!')
 
+# check that's pretty useful
+async def is_admin(ctx):
+	if ctx.author.top_role.permissions.manage_channels:
+		return True
+	else:
+		await ctx.send("Sorry, you can't use this command! :confused:")
+		return False
+
 @bot.command()
-async def check(*args):
+async def checkUser(ctx, *args):
 	"""Checks a reddit user's karma on furry_irl and in total"""
 	if len(args) <= 0:
-		 await bot.say("You need to specify a reddit user!\neg. `b.check SimStart`")
+		 await ctx.send("You need to specify a reddit user!\neg. `b.check SimStart`")
 	else:
 		logger.info("check called: " + args[0])
 		usrS = await SnoopSnooAPI.async_getUserJSON(args[0])
@@ -163,7 +184,7 @@ async def check(*args):
 				needRefresh = True
 		if needRefresh:
 			logger.info("user needed refresh...")
-			await bot.say("Give me a minute while I refresh " + fixUsername(args[0]) + "'s profile...")
+			await ctx.send("Give me a minute while I refresh " + fixUsername(args[0]) + "'s profile...")
 			ref = await SnoopSnooAPI.async_refreshSnoop(args[0])
 			if ref == "OK":
 				# all is good, get the new user info
@@ -172,11 +193,11 @@ async def check(*args):
 			elif ref.find("EXCEPTION") == 0:
 				# some server side exception, tell user not to panic
 				logger.warning("snoopsnoo error: " + ref)
-				return await bot.say("Oopsie Woopsie! SnoopSnoo made a little fucky wucky!\n(try again in a minute)")
+				return await ctx.send("Oopsie Woopsie! SnoopSnoo made a little fucky wucky!\n(try again in a minute)")
 			else:
 				# something went wrong, say something and return
 				logger.warning("refresh error: " + ref)
-				return await bot.say("Error getting info on " + fixUsername(args[0]) + ", are you sure the user exists?")
+				return await ctx.send("Error getting info on " + fixUsername(args[0]) + ", are you sure the user exists?")
 		try:
 			updTime = usr['data']['metadata']['last_updated']
 			name = usr['data']['username']
@@ -195,86 +216,83 @@ async def check(*args):
 		embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
 		embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)
 		embd.add_field(name="Last Refreshed: ", value=updTime, inline=True)
-		await bot.say(embed=embd)
+		await ctx.send(embed=embd)
 		
 		# Check if the user is able to join now, and add to queue if they are
 		if(isQualified(firlK, firlC) and not (name.lower() in acceptedusers)):
 			acceptedusers.append(name.lower())
 			newUserQueue.put(name)
 
-@bot.command(pass_context=True)
+@bot.command()
+@commands.check(is_admin)
 async def ignore(ctx, *args):
 	"""Manually specify a reddit user for this bot to ignore (mods only)"""
-	if ctx.message.author.top_role.permissions.manage_channels:
-		if len(args) <= 0:
-			await bot.say("You need to specify a reddit user!\neg. `b.ignore SimStart`")
-		else:
-			logger.info("b.ignore called: "+args[0])
-			acceptedusers.append(args[0].lower())
-			await bot.say(args[0] + " will be ignored by this bot :thumbsup:")
+	if len(args) <= 0:
+		await ctx.send("You need to specify a reddit user!\neg. `b.ignore SimStart`")
 	else:
-		await bot.say("Sorry, you can't use this command! :confused:")
+		logger.info("b.ignore called: "+args[0])
+		acceptedusers.append(args[0].lower())
+		await ctx.send(args[0] + " will be ignored by this bot :thumbsup:")
 
-@bot.group(pass_context=True)
+@bot.group()
 async def ping(ctx):
 	"""Set up username pings for #top-posts-of-day"""
 	if ctx.invoked_subcommand is None:
-		await bot.say("Invalid command! use `b.ping user <@discord> <redditname>` or `b.ping me <redditname>`")
+		await ctx.send("Invalid command! use `b.ping user <@discord> <redditname>` or `b.ping me <redditname>`")
 
-@ping.command(pass_context=True)
-async def user(ctx,member: discord.Member=None,redditname: str=None):
+@ping.command()
+@commands.check(is_admin)
+async def user(ctx, member: discord.Member=None, redditname: str=None):
 	"""Associate a discord user to a reddit username (mods only)"""
-	if ctx.message.author.top_role.permissions.manage_channels:
-		if member is None or redditname is None:
-			await bot.say("You need to specify both a Discord user and a reddit username,\neg. `b.ping user @SimStart SimStart`")
-		else:
-			logger.info("b.ping user called: "+member.id+" ; "+redditname)
-			if not redditname.lower() in acceptedusers:
-				await bot.say("Couldn't find '"+redditname+"' in accepted users, are you sure their name is spelled correctly?")
-			else:
-				userMap[0].append(redditname.lower())
-				userMap[1].append(member.id)
-				FileParser.writeNestedList("usermap.txt", userMap, 'w')
-				await bot.say("Added "+fixUsername(redditname)+" to the ping list :thumbsup:")
+	if member is None or redditname is None:
+		await ctx.send("You need to specify both a Discord user and a reddit username,\neg. `b.ping user @SimStart SimStart`")
 	else:
-		await bot.say("Sorry, you can't use this command! :confused:")
+		logger.info("b.ping user called: "+str(member.id)+" ; "+redditname)
+		if not redditname.lower() in acceptedusers:
+			await ctx.send("Couldn't find '"+redditname+"' in accepted users, are you sure their name is spelled correctly?")
+		else:
+			userMap[0].append(redditname.lower())
+			userMap[1].append(str(member.id))
+			FileParser.writeNestedList("usermap.txt", userMap, 'w')
+			await ctx.send("Added "+fixUsername(redditname)+" to the ping list :thumbsup:")
 
-@ping.command(pass_context=True)
+@ping.command()
 async def me(ctx, redditname: str=None):
 	"""Associate a reddit username to your discord name"""
 	if redditname is None:
-		await bot.say("You need to specify a reddit username,\neg. `b.ping me SimStart`")
+		await ctx.send("You need to specify a reddit username,\neg. `b.ping me SimStart`")
 	else:
-		logger.info("b.ping me called: "+ctx.message.author.id+" ; "+redditname)
+		logger.info("b.ping me called: "+str(ctx.author.id)+" ; "+redditname)
 		if not redditname.lower() in acceptedusers:
-			await bot.say("Couldn't find '"+redditname+"' in accepted users, are you sure their name is spelled correctly?")
+			await ctx.send("Couldn't find '"+redditname+"' in accepted users, are you sure their name is spelled correctly?")
 		else:
 			userMap[0].append(redditname.lower())
-			userMap[1].append(ctx.message.author.id)
+			userMap[1].append(str(ctx.author.id))
 			FileParser.writeNestedList("usermap.txt", userMap, 'w')
-			await bot.say("Added "+fixUsername(redditname)+" to the ping list :thumbsup:")
+			await ctx.send("Added "+fixUsername(redditname)+" to the ping list :thumbsup:")
 
-@ping.command(pass_context=True)
-async def remove(ctx,redditname: str=None):
+@ping.command()
+@commands.check(is_admin)
+async def remove(ctx, redditname: str=None):
 	"""Remove all associations used for a reddit user (mods only)"""
-	if ctx.message.author.top_role.permissions.manage_channels:
-		if redditname is None:
-			await bot.say("You need to specify a reddit username,\neg. `b.ping remove SimStart`")
-		else:
-			logger.info("b.ping remove called: "+redditname)
-			num = 0
-			while redditname.lower() in userMap[0]:
-				idx = userMap[0].index(redditname.lower())
-				userMap[0].pop(idx)
-				userMap[1].pop(idx)
-				num += 1
-			FileParser.writeNestedList("usermap.txt", userMap, 'w')
-			await bot.say("Removed "+str(num)+" instances of "+fixUsername(redditname)+" from the ping list :thumbsup:")
+	if redditname is None:
+		await ctx.send("You need to specify a reddit username,\neg. `b.ping remove SimStart`")
 	else:
-		await bot.say("Sorry, you can't use this command! :confused:")
+		logger.info("b.ping remove called: "+redditname)
+		num = 0
+		while redditname.lower() in userMap[0]:
+			idx = userMap[0].index(redditname.lower())
+			userMap[0].pop(idx)
+			userMap[1].pop(idx)
+			num += 1
+		FileParser.writeNestedList("usermap.txt", userMap, 'w')
+		await ctx.send("Removed "+str(num)+" instances of "+fixUsername(redditname)+" from the ping list :thumbsup:")
 
 if __name__ == '__main__':
 	print("BouncerBot : " + VERSION + "\nCreated by SockHungryClutz for the Furry Shitposting Guild\n(All further non-error messages will be output to logs)")
+	# Start the logger
+	logger = RollingLogger_Async(logname, filesizemax, numlogsmax, logVerbosity)
+	
 	# Create the shared list between the processes
 	man = Manager()
 	acceptedusers = man.list(aul)
@@ -288,17 +306,20 @@ if __name__ == '__main__':
 	theLoop.create_task(check_user_queue())
 	theLoop.create_task(check_post_queue())
 	# Work around discord heartbeat timeouts on lesser hardware (raspberry pi)
+	isFirstLoop = True
 	while not realCleanShutDown:
 		# Hack, thanks Hornwitser
-		if bot.is_closed:
+		if bot.is_closed and not isFirstLoop:
 			logger.warning("Bot closed, attempting reconnect...")
 			bot._closed.clear()
 			bot.http.recreate()
 		try:
+			isFirstLoop = False
 			theLoop.run_until_complete(bot.start(token))
 		except BaseException as e:
 			logger.warning("Discord connection reset:\n" + str(e))
 		finally:
 			time.sleep(60)
+	theLoop.run_until_complete(bot.logout())
 	logger.closeLog()
 	theLoop.close()
