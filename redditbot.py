@@ -6,15 +6,6 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-# Define Helper Functions
-# Manages how long each task should sleep, posting a warning if a task takes too long
-def checkTime(atime, btime, cr):
-	sleeptime = atime - btime
-	if sleeptime < 0:
-		self.logger.warning("!Coroutine "+ cr +" went over time! " + str(sleeptime))
-		sleeptime = 0
-	return sleeptime
-
 """
 Main class for the reddit side
 """
@@ -48,6 +39,14 @@ class RedditBot():
 		self.gracefulExit = False
 		
 		self.logger.info("Reddit initialize success!")
+	
+	# Manages how long each task should sleep, posting a warning if a task takes too long
+	def checkTime(self, atime, btime, cr):
+		sleeptime = atime - btime
+		if sleeptime < 0:
+			self.logger.warning("!Coroutine "+ cr +" went over time! " + str(sleeptime))
+			sleeptime = 0
+		return sleeptime
 	
 	# Whether or not a user meets the requirements
 	def isQualified(self, subKarma, comKarma):
@@ -137,7 +136,7 @@ class RedditBot():
 			
 			# keep the pace
 			endTime = time.time()
-			await asyncio.sleep(checkTime(self.REDDIT_REFRESH_RATE, startTime - endTime, "async_newUsers"))
+			await asyncio.sleep(self.checkTime(self.REDDIT_REFRESH_RATE, startTime - endTime, "async_newUsers"))
 	
 	# Async - checks top posts of the subreddit
 	async def async_topPosts(self):
@@ -161,7 +160,7 @@ class RedditBot():
 			if wasChanged:
 				FileParser.writeNestedList("redditcache.txt", self.redditCache, 'w')
 			endTime = time.time()
-			await asyncio.sleep(checkTime(self.TOP_REFRESH_RATE, startTime - endTime, "async_topPosts"))
+			await asyncio.sleep(self.checkTime(self.TOP_REFRESH_RATE, startTime - endTime, "async_topPosts"))
 	
 	# Async - checks users against snoopsnoo
 	async def async_checkUsers(self):
@@ -173,10 +172,18 @@ class RedditBot():
 			u = 0
 			while u < len(self.redditCache[1]):
 				usr = self.redditCache[1][u]
-				self.r = await SnoopSnooAPI.async_refreshSnoop(usr)
-				if self.r != "OK":
-					self.logger.warning("Error in SS refresh for '" + usr + "': " + self.r)
-					u += 1
+				res = await SnoopSnooAPI.async_refreshSnoop(usr)
+				if res != "OK":
+					# See if the user exists, may be deleted or banned
+					ru = self.r.redditor(usr)
+					try:
+						if ru.id:
+							self.logger.warning("Error in SS refresh for '" + usr + "': " + res)
+							u += 1
+					except:
+							self.logger.warning("User likely deleted or suspended - '" + usr + "': " + res)
+							self.redditCache[1].pop(u)
+							self.redditCache[2].pop(u)
 				else:
 					if await self.async_isQualifiedSnoop(usr):
 						wasChanged = True
@@ -198,7 +205,7 @@ class RedditBot():
 				FileParser.writeList("acceptedusers.txt", self.acceptedUsers, 'w')
 			FileParser.writeNestedList("redditcache.txt", self.redditCache, 'w')
 			endTime = time.time()
-			await asyncio.sleep(checkTime(self.SNOOPSNOO_REFRESH_RATE, startTime - endTime, "async_checkUsers"))
+			await asyncio.sleep(self.checkTime(self.SNOOPSNOO_REFRESH_RATE, startTime - endTime, "async_checkUsers"))
 	
 	# Async - checks for exit conditions and prepares to stop
 	async def async_checkExit(self):
