@@ -233,13 +233,21 @@ class RedditBot():
 		tasks.append(asyncio.ensure_future(self.async_checkExit()))
 		# Quit as soon as one returns (the checkExit), don't care about results
 		done, notdone = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+		# Log if a coroutine returned early because of an exception
+		for t in done:
+			exp = t.exception()
+			if exp:
+				self.logger.error("REDDIT BOT EXCEPTION: " + str(exp))
 		for t in notdone:
 			t.cancel()
 
 def initBotAndRun(queueList, config, usrlist):
 	rb = RedditBot(queueList, config, usrlist)
 	loop = asyncio.get_event_loop()
-	try:
-		loop.run_until_complete(rb.run())
-	finally:
-		loop.close()
+	# Restart coroutines if we didn't mean to shutdown
+	while not rb.gracefulExit:
+		try:
+			loop.run_until_complete(rb.run())
+		except BaseException as e:
+			print("Exception in InitAndRun: " + str(e))
+	loop.close()
