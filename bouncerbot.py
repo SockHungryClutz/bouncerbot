@@ -23,7 +23,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.3.2'
+VERSION = '1.3.3'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -115,14 +115,16 @@ async def check_post_queue():
 			if newPost == None:
 				closeDiscord = True
 				continue
-			logger.info("added post: "+newPost[0]+' ; '+newPost[1]+' ; '+newPost[2])
-			if newPost[0].lower() in userMap[0]:
-				uidx = userMap[0].index(newPost[0].lower())
+			# don't log post title, emojis can break shit
+			logger.info("added post: "+newPost[1]+' ; '+newPost[2]+' ; '+newPost[3])
+			if newPost[1].lower() in userMap[0]:
+				uidx = userMap[0].index(newPost[1].lower())
 				duser = await bot.get_user_info(userMap[1][uidx])
-				realuser = duser.mention + " (" + fixUsername(newPost[0]) + ")"
+				realuser = duser.mention + " (" + fixUsername(newPost[1]) + ")"
 			else:
-				realuser = fixUsername(newPost[0])
-			msg = "user: " + realuser + "\ncontent: " + newPost[1] + "\npost: " + newPost[2]
+				realuser = fixUsername(newPost[1])
+			realtitle = fixUsername(newPost[0])
+			msg = realtitle+"\nuser: "+realuser+"\ncontent: "+newPost[1]+"\npost: "+newPost[2]
 			await bot.get_channel(findChannel(config['general']['post_announce_channel'])).send(content=msg, embed=None)
 		if closeDiscord:
 			# all other queues should be closed by the reddit side
@@ -145,6 +147,22 @@ async def is_admin(ctx):
 	else:
 		await ctx.send("Sorry, you can't use this command! :confused:")
 		return False
+
+# check that's very restrictive, assume's owner is the first one to set up ping
+async def is_owner(ctx):
+	if ctx.author.id == int(userMap[1][0]):
+		return True
+	else:
+		await ctx.send("This super-secret command only works for my owner!")
+		return False
+
+# async function to slide into them DM's
+async def get_dm_channel(auth):
+	dm_chan = auth.dm_channel
+	if dm_chan == None:
+		await auth.create_dm()
+		dm_chan = auth.dm_channel
+	return dm_chan
 
 @bot.command()
 async def check(ctx, *args):
@@ -282,6 +300,52 @@ async def remove(ctx, redditname: str=None):
 			num += 1
 		FileParser.writeNestedList("usermap.txt", userMap, 'w')
 		await ctx.send("Removed "+str(num)+" instances of "+fixUsername(redditname)+" from the ping list :thumbsup:")
+
+# secret command to send the current user lists
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def sendlists(ctx):
+	"""Sends the lists of accepted and pingable users (mods only)"""
+	logger.info("b.sendLists called")
+	list_files = [
+		discord.File('acceptedusers.txt', 'AcceptedUsers.txt'),
+		discord.File('usermap.txt', 'PingList.txt'),
+	]
+	await ctx.send(files=list_files)
+
+# super-secret command to DM the current cache and settings for the bot
+# THIS WILL SEND THE API KEY INFORMATION TOO, MAKE SURE YOUR USERNAME IS FIRST ON PING LIST
+@bot.command(hidden=True)
+@commands.check(is_owner)
+async def sendCache(ctx):
+	"""Sends ALL importnat background info about this bot"""
+	logger.info("b.sendCache called")
+	cache_files = [
+		discord.File('redditcache.txt', 'redditcache.txt'),
+		discord.File('botconfig.ini', 'botconfig.ini'),
+	]
+	dm_chan = await get_dm_channel(ctx.author)
+	if dm_chan != None:
+		await dm_chan.send(files=cache_files)
+	else:
+		logger.warning("sendcache failed: could not slide into DM's!")
+
+# super-secret command that sends the logs via DM
+# less dangerous than above, but still owner-only
+@bot.command(hidden=True)
+@commands.check(is_owner)
+async def sendLogs(ctx):
+	"""Sends bouncerbot's logs for analysis"""
+	logger.info("b.sendLogs called")
+	log_files = [
+		discord.File('RedditLog.log', 'RedditLog.txt'),
+		discord.File('DiscordLog.log', 'DiscordLog.txt'),
+	]
+	dm_chan = await get_dm_channel(ctx.author)
+	if dm_chan != None:
+		await dm_chan.send(files=log_files)
+	else:
+		logger.warning("sendlogs failed: could not slide into DM's!")
 
 if __name__ == '__main__':
 	print("BouncerBot : " + VERSION + "\nCreated by SockHungryClutz for the Furry Shitposting Guild\n(All further non-error messages will be output to logs)")
