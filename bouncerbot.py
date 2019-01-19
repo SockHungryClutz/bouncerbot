@@ -23,7 +23,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.3.3'
+VERSION = '1.3.3a'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -124,7 +124,7 @@ async def check_post_queue():
 			else:
 				realuser = fixUsername(newPost[1])
 			realtitle = fixUsername(newPost[0])
-			msg = realtitle+"\nuser: "+realuser+"\ncontent: "+newPost[1]+"\npost: "+newPost[2]
+			msg = realtitle+"\nuser: "+realuser+"\ncontent: "+newPost[2]+"\npost: "+newPost[3]
 			await bot.get_channel(findChannel(config['general']['post_announce_channel'])).send(content=msg, embed=None)
 		if closeDiscord:
 			# all other queues should be closed by the reddit side
