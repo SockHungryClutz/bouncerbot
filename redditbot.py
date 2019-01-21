@@ -250,4 +250,5 @@ def initBotAndRun(queueList, config, usrlist):
 			loop.run_until_complete(rb.run())
 		except BaseException as e:
 			print("Exception in InitAndRun: " + str(e))
+		time.sleep(60)
 	loop.close()
