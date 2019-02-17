@@ -7,7 +7,7 @@ probably aren't necessary, so here's what they look like:
 DiscordLogger                  RedditLogger
      |                               |
  DiscordBot -- SharedUserList -- RedditBot
- 
+
 The discord and reddit bots are also async, meaning everything is a
 weird but efficient mess.
 """
@@ -101,7 +101,7 @@ def file_check(oldfn, newfn, channel, resultq):
 	users = FileParser.parseFile(newfn, False);
 	# delete file after loading
 	os.remove(newfn)
-	fileloop = asyncio.get_event_loop()
+	fileloop = asyncio.new_event_loop()
 	filetasks = []
 	results = []
 	#for usr in users:
@@ -118,7 +118,7 @@ def file_check(oldfn, newfn, channel, resultq):
 	except BaseException as e:
 		print("Exception in file_check: " + str(e))
 	fileloop.close()
-	
+
 # Async routine that checks one user for the above function
 async def process_user(usr):
 	maxServRetry = 2
