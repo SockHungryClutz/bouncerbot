@@ -11,6 +11,7 @@ DiscordLogger                  RedditLogger
 The discord and reddit bots are also async, meaning everything is a
 weird but efficient mess.
 """
+import os
 import discord
 from discord.ext import commands
 import asyncio
@@ -23,7 +24,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.3.3b'
+VERSION = '1.4.0'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -52,6 +53,10 @@ userMap = FileParser.parseFile("usermap.txt", True)
 newUserQueue = Queue()
 newPostQueue = Queue()
 queueList = [newUserQueue, newPostQueue]
+# Extra stuff for the check file process
+filesAwaited = 0
+fileQueue = Queue()
+fileprocs = []
 
 # Start the discord logger
 # No wait, don't, it breaks on Windows
@@ -90,6 +95,47 @@ def isQualified(subKarma, comKarma):
 # Escapes underscores in usernames to prevent weird italics
 def fixUsername(name):
 	return name.replace('_','\_')
+
+# Does processing for files of users to check
+def file_check(oldfn, newfn, channel, resultq):
+	users = FileParser.parseFile(newfn, False);
+	# delete file after loading
+	os.remove(newfn)
+	fileloop = asyncio.get_event_loop()
+	filetasks = []
+	results = []
+	#for usr in users:
+	#	filetasks.append(fileloop.create_task(process_user(usr)))
+	try:
+		#done,notdone = fileloop.run_until_complete(asyncio.wait(filetasks, return_when=asyncio.ALL_COMPLETED))
+		for usr in users:
+			done = fileloop.run_until_complete(process_user(usr))
+			results.append(done)
+		results = sorted(results, key=lambda s: s.lower())
+		results.insert(0, '"Username", "Total Karma", "Submission Karma", "Comment Karma", "Notes"')
+		FileParser.writeList(oldfn+'_results.txt',results,'w')
+		resultq.put([oldfn, channel])
+	except BaseException as e:
+		print("Exception in file_check: " + str(e))
+	fileloop.close()
+	
+# Async routine that checks one user for the above function
+async def process_user(usr):
+	maxServRetry = 2
+	maxUsrRetry = 1
+	result = -1
+	while result < 0 and maxServRetry >= 0 and maxUsrRetry >= 0:
+		result,totalC,totalS,firlC,firlK,updTime = await check_user(usr, None)
+		if result == -1:
+			maxServRetry -= 1
+		elif result == -2:
+			maxUsrRetry -= 1
+	if result == -1:
+		return usr+', 0, 0, 0, "Server side SnoopSnoo Error occurred"'
+	elif result == -2:
+		return usr+', 0, 0, 0, "User not found, do they exist?"'
+	else:
+		return usr+", "+str(firlC+firlK)+", "+str(firlK)+", "+str(firlC)+", OK"
 
 # Checks post and user queues from the reddit side, messaging when any are ready
 async def check_user_queue():
@@ -135,6 +181,30 @@ async def check_post_queue():
 		await asyncio.sleep(queuePoll)
 	await bot.logout()
 
+# another check for file queue
+async def check_file_queue():
+	global filesAwaited
+	global realCleanShutDown
+	await bot.wait_until_ready()
+	while not bot.is_closed() and not realCleanShutDown:
+		if filesAwaited == 0:
+			await asyncio.sleep(30)
+		else:
+			while not fileQueue.empty():
+				l = fileQueue.get()
+				fn = l[0]
+				ch = l[1]
+				# join in order they were made I guess
+				fileprocs[0].join()
+				del fileprocs[0]
+				list_files = [
+					discord.File(fn+'_results.txt', fn+'_Results.csv'),
+				]
+				await bot.get_channel(findChannel(ch)).send(fn + " Done!", files=list_files)
+				os.remove(fn+'_results.txt')
+				filesAwaited -= 1
+			await asyncio.sleep(5)
+
 @bot.event
 async def on_ready():
 	await bot.change_presence(activity=discord.Game(name='b.help for commands', type=1))
@@ -164,77 +234,111 @@ async def get_dm_channel(auth):
 		dm_chan = auth.dm_channel
 	return dm_chan
 
+# Async function check a single reddit user, returns a code for success/failure
+async def check_user(username, ctx):
+	usrS = await SnoopSnooAPI.async_getUserJSON(username)
+	usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
+	totalC = 0
+	totalS = 0
+	firlC = 0
+	firlK = 0
+	# some default value to prevent errors
+	updTime = ""
+	needRefresh = False
+	name = username
+	try:
+		errCode = usr['error']
+		if errCode == 404:
+			# there was an error, try refreshing the user
+			needRefresh = True
+	except KeyError as e:
+		# this means that all's good, do the rest of the stuff
+		pass
+	# Check the time of the last refresh
+	if not needRefresh:
+		updTime = usr['data']['metadata']['last_updated']
+		uT = datetime.strptime(updTime, "%a, %d %b %Y %X %Z")
+		nT = datetime.utcnow()
+		dT = (nT - uT).total_seconds()
+		if dT >= 14400:
+			needRefresh = True
+	if needRefresh:
+		if ctx != None:
+			logger.info("user needed refresh...")
+			await ctx.send("Give me a minute while I refresh " + fixUsername(username) + "'s profile...")
+		ref = await SnoopSnooAPI.async_refreshSnoop(username)
+		if ref == "OK":
+			# all is good, get the new user info
+			usrS = await SnoopSnooAPI.async_getUserJSON(username)
+			usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
+		elif ref.find("EXCEPTION") == 0:
+			# some server side exception, tell user not to panic
+			if ctx != None:
+				logger.warning("snoopsnoo error: " + ref)
+			return -1,totalC,totalS,firlC,firlK,updTime
+		else:
+			# something went wrong, say something and return
+			if ctx != None:
+				logger.warning("refresh error: " + ref)
+			return -2,totalC,totalS,firlC,firlK,updTime
+	try:
+		updTime = usr['data']['metadata']['last_updated']
+		name = usr['data']['username']
+		totalC = usr['data']['summary']['comments']['all_time_karma']
+		totalS = usr['data']['summary']['submissions']['all_time_karma']
+		# async doesn't matter when string is provided
+		firl = SnoopSnooAPI.getSubredditActivity(username, subreddit, usrS)
+		if firl != None:
+			firlC = firl["comment_karma"]
+			firlK = firl["submission_karma"]
+	except KeyError as e:
+		# probably couldn't find the subreddit, all's good, just pass
+		pass
+	# return OK and the results
+	return 0,totalC,totalS,firlC,firlK,updTime
+
 @bot.command()
 async def check(ctx, *args):
-	"""Checks a reddit user's karma on furry_irl and in total"""
-	if len(args) <= 0:
-		 await ctx.send("You need to specify a reddit user!\neg. `b.check SimStart`")
+	"""Checks reddit user or users' karma on furry_irl and in total"""
+	global filesAwaited
+	global fileprocs
+	files = ctx.message.attachments
+	if len(args) <= 0 and len(files) <= 0:
+		 await ctx.send("You need to specify a reddit user!\neg. `b.check SimStart`\nOr, attach a file of usernames to your message!")
 	else:
-		logger.info("check called: " + args[0])
-		usrS = await SnoopSnooAPI.async_getUserJSON(args[0])
-		usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
-		totalC = 0
-		totalS = 0
-		firlC = 0
-		firlK = 0
-		needRefresh = False
-		name = args[0]
-		try:
-			errCode = usr['error']
-			if errCode == 404:
-				# there was an error, try refreshing the user
-				needRefresh = True
-		except KeyError as e:
-			# this means that all's good, do the rest of the stuff
-			pass
-		# Check the time of the last refresh
-		if not needRefresh:
-			updTime = usr['data']['metadata']['last_updated']
-			uT = datetime.strptime(updTime, "%a, %d %b %Y %X %Z")
-			nT = datetime.utcnow()
-			dT = (nT - uT).total_seconds()
-			if dT >= 14400:
-				needRefresh = True
-		if needRefresh:
-			logger.info("user needed refresh...")
-			await ctx.send("Give me a minute while I refresh " + fixUsername(args[0]) + "'s profile...")
-			ref = await SnoopSnooAPI.async_refreshSnoop(args[0])
-			if ref == "OK":
-				# all is good, get the new user info
-				usrS = await SnoopSnooAPI.async_getUserJSON(args[0])
-				usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
-			elif ref.find("EXCEPTION") == 0:
-				# some server side exception, tell user not to panic
-				logger.warning("snoopsnoo error: " + ref)
+		if len(files) > 0:
+			logger.info("check called with " + str(len(files)) + " files")
+			# process files one at a time, but do all at once for each file
+			for f in files:
+				tempfn = "temp"+str(filesAwaited)+".txt"
+				try:
+					await f.save(tempfn)
+				except BaseException as e:
+					logger.warning("Save file failed: " + e)
+					return await ctx.send("Error! Could not open file! :dizzy_face:")
+				await ctx.send("Checking users in " + f.filename + ", hang tight, this could take awhile...")
+				fileprocs.append(Process(target=file_check, args=(f.filename,tempfn,ctx.channel.name,fileQueue,)))
+				fileprocs[filesAwaited].start()
+				filesAwaited += 1
+		else:
+			logger.info("check called: " + args[0])
+			result,totalC,totalS,firlC,firlK,updTime = await check_user(args[0], ctx)
+			if result == -1:
 				return await ctx.send("Oopsie Woopsie! SnoopSnoo made a little fucky wucky!\n(try again in a minute)")
-			else:
-				# something went wrong, say something and return
-				logger.warning("refresh error: " + ref)
+			elif result == -2:
 				return await ctx.send("Error getting info on " + fixUsername(args[0]) + ", are you sure the user exists?")
-		try:
-			updTime = usr['data']['metadata']['last_updated']
-			name = usr['data']['username']
-			totalC = usr['data']['summary']['comments']['all_time_karma']
-			totalS = usr['data']['summary']['submissions']['all_time_karma']
-			# async doesn't matter when string is provided
-			firl = SnoopSnooAPI.getSubredditActivity(args[0], subreddit, usrS)
-			if firl != None:
-				firlC = firl["comment_karma"]
-				firlK = firl["submission_karma"]
-		except KeyError as e:
-			# probably couldn't find the subreddit, all's good, just pass
-			pass
-		# Build the response embed
-		embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
-		embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
-		embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)
-		embd.add_field(name="Last Refreshed: ", value=updTime, inline=True)
-		await ctx.send(embed=embd)
-		
-		# Check if the user is able to join now, and add to queue if they are
-		if(isQualified(firlK, firlC) and not (name.lower() in acceptedusers)):
-			acceptedusers.append(name.lower())
-			newUserQueue.put(name)
+			else:
+				# Build the response embed
+				embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
+				embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
+				embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)
+				embd.add_field(name="Last Refreshed: ", value=updTime, inline=True)
+				await ctx.send(embed=embd)
+				
+				# Check if the user is able to join now, and add to queue if they are
+				if(isQualified(firlK, firlC) and not (name.lower() in acceptedusers)):
+					acceptedusers.append(name.lower())
+					newUserQueue.put(name)
 
 @bot.command()
 @commands.check(is_admin)
@@ -364,6 +468,7 @@ if __name__ == '__main__':
 	theLoop = bot.loop
 	theLoop.create_task(check_user_queue())
 	theLoop.create_task(check_post_queue())
+	theLoop.create_task(check_file_queue())
 	# Work around discord heartbeat timeouts on lesser hardware (raspberry pi)
 	while not realCleanShutDown:
 		# Hopefully don't need to use a hack for this...

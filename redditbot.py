@@ -217,6 +217,7 @@ class RedditBot():
 				self.postQueue.put(None)
 				self.gracefulExit = True
 				self.postQueue.close()
+				self.acceptQueue.close()
 				self.logger.closeLog()
 				break
 			await asyncio.sleep(self.EXIT_POLL_RATE)
