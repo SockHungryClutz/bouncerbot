@@ -9,7 +9,8 @@ DiscordLogger                  RedditLogger
  DiscordBot -- SharedUserList -- RedditBot
 
 The discord and reddit bots are also async, meaning everything is a
-weird but efficient mess.
+weird but efficient mess. DiscordBot process can also make processes
+to handle checking large numbers of users
 """
 import os
 import discord
@@ -24,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.4.0'
+VERSION = '1.4.0a'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -321,6 +322,7 @@ async def check(ctx, *args):
 				fileprocs[filesAwaited].start()
 				filesAwaited += 1
 		else:
+			name = args[0]
 			logger.info("check called: " + args[0])
 			result,totalC,totalS,firlC,firlK,updTime = await check_user(args[0], ctx)
 			if result == -1:
