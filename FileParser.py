@@ -10,13 +10,20 @@ class FileParser():
 	# Returns a cleaned list from a file, may or may not be subdivided per line
 	def parseFile(filename, split):
 		r = FileParser.readFile(filename)
-		i = len(r) - 1
+		l = len(r) - 1
+		i = l
+		lastChar = r[l][-1]
 		while i >= 0:
 			if split:
 				r[i] = r[i][:-1].split()
 			else:
 				r[i] = r[i][:-1]
 			i -= 1
+		if not lastChar.isspace():
+			if split:
+				r[l][len(r[l])-1] = r[l][len(r[l])-1] + lastChar
+			else:
+				r[l] = r[l] + lastChar
 		return r
 	
 	@staticmethod
