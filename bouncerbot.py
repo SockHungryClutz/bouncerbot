@@ -25,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.4.0b'
+VERSION = '1.4.1'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -172,7 +172,11 @@ async def check_post_queue():
 				realuser = fixUsername(newPost[1])
 			realtitle = fixUsername(newPost[0])
 			msg = realtitle+"\nuser: "+realuser+"\ncontent: "+newPost[2]+"\npost: "+newPost[3]
-			await bot.get_channel(findChannel(config['general']['post_announce_channel'])).send(content=msg, embed=None)
+			# trailing '!' denotes NSFW post now, can't happen otherwise since it'd make an invalid url
+			if newPost[-1][0] == '!':
+				await bot.get_channel(findChannel(config['general']['nsfw_post_channel'])).send(content=msg, embed=None)
+			else:
+				await bot.get_channel(findChannel(config['general']['post_announce_channel'])).send(content=msg, embed=None)
 		if closeDiscord:
 			# all other queues should be closed by the reddit side
 			logger.info("Discord process is shutting down now")

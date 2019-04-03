@@ -151,7 +151,7 @@ class RedditBot():
 					wasChanged = True
 					self.redditCache[3].append(str(post.id))
 					if post.over_18:
-						self.postQueue.put([post.title, post.author.name, '<'+post.url+'> **NSFW**', '<'+post.shortlink+'> **NSFW**'])
+						self.postQueue.put([post.title, post.author.name, post.url, post.shortlink, '!'])
 					else:
 						self.postQueue.put([post.title, post.author.name, post.url, post.shortlink])
 					l = len(self.redditCache[3])
