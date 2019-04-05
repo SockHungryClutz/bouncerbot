@@ -25,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.4.1'
+VERSION = '1.4.2'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -149,7 +149,10 @@ async def check_user_queue():
 			redditurl = "https://www.reddit.com/u/" + newUsr
 			snoopurl = "https://snoopsnoo.com/u/" + newUsr
 			msg = fixUsername(newUsr) + " is now eligible for entry! :grinning:\n" + redditurl + "\n" + snoopurl
-			await bot.get_channel(findChannel(config['general']['user_announce_channel'])).send(content=msg, embed=None)
+			try:
+				await bot.get_channel(findChannel(config['general']['user_announce_channel'])).send(content=msg, embed=None)
+			except BaseException as e:
+				logger.error("Failed to send user message!\n" + str(e))
 		await asyncio.sleep(queuePoll)
 
 async def check_post_queue():
@@ -172,11 +175,14 @@ async def check_post_queue():
 				realuser = fixUsername(newPost[1])
 			realtitle = fixUsername(newPost[0])
 			msg = realtitle+"\nuser: "+realuser+"\ncontent: "+newPost[2]+"\npost: "+newPost[3]
-			# trailing '!' denotes NSFW post now, can't happen otherwise since it'd make an invalid url
-			if newPost[-1][0] == '!':
-				await bot.get_channel(findChannel(config['general']['nsfw_post_channel'])).send(content=msg, embed=None)
-			else:
-				await bot.get_channel(findChannel(config['general']['post_announce_channel'])).send(content=msg, embed=None)
+			try:
+				# trailing '!' denotes NSFW post now, can't happen otherwise since it'd make an invalid url
+				if newPost[-1][0] == '!':
+					await bot.get_channel(findChannel(config['general']['nsfw_post_channel'])).send(content=msg, embed=None)
+				else:
+					await bot.get_channel(findChannel(config['general']['post_announce_channel'])).send(content=msg, embed=None)
+			except BaseException as e:
+				logger.error("Failed to send post message!\n" + str(e))
 		if closeDiscord:
 			# all other queues should be closed by the reddit side
 			logger.info("Discord process is shutting down now")
