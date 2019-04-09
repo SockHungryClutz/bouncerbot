@@ -25,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.4.2'
+VERSION = '1.4.2a'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -127,7 +127,8 @@ async def process_user(usr):
 	result = -1
 	while result < 0 and maxServRetry >= 0 and maxUsrRetry >= 0:
 		result,totalC,totalS,firlC,firlK,updTime = await check_user(usr, None)
-		if result == -1:
+		# All these users should have > 0 subreddit karma, treat this as a server error
+		if result == -1 or firlK < 1:
 			maxServRetry -= 1
 		elif result == -2:
 			maxUsrRetry -= 1
