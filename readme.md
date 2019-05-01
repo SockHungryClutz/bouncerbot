@@ -10,7 +10,7 @@ Helper bot for the Furry Shitposting Guild
 * Use [pip](https://pypi.org/project/pip/) to install the following:  
   * [requests](https://pypi.org/project/requests/)  
   * [discord-rewrite](https://pypi.org/project/discord-rewrite/) (**NOT** discord.py)  
-  * [praw](https://pypi.org/project/praw/)  
+  * [praw](https://pypi.org/project/praw/) (V6.1.0 or greater for spoiler support!)  
 * Everything else should be installed with the other packages
 
 **NOTE**: you will have to use `pip install git+https://github.com/Rapptz/discord.py@rewrite` to install discord-rewrite, the version on pypi has issues
