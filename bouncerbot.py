@@ -25,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.4.2a'
+VERSION = '1.4.3'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -166,6 +166,7 @@ async def check_post_queue():
 			if newPost == None:
 				closeDiscord = True
 				continue
+			isSpoiler = False
 			# don't log post title, emojis can break shit
 			logger.info("added post: "+newPost[1]+' ; '+newPost[2]+' ; '+newPost[3])
 			if newPost[1].lower() in userMap[0]:
@@ -174,8 +175,15 @@ async def check_post_queue():
 				realuser = duser.mention + " (" + fixUsername(newPost[1]) + ")"
 			else:
 				realuser = fixUsername(newPost[1])
+			# trailing '?' denotes spoiler, not a valid url since params come after it
+			if newPost[-1][0] == '?':
+				isSpoiler = True
+				newPost = newPost[:-1]
 			realtitle = fixUsername(newPost[0])
-			msg = realtitle+"\nuser: "+realuser+"\ncontent: "+newPost[2]+"\npost: "+newPost[3]
+			if isSpoiler:
+				msg = realtitle+"\nuser: "+realuser+"\ncontent: ||"+newPost[2]+"||\npost: ||"+newPost[3]+"||"
+			else:
+				msg = realtitle+"\nuser: "+realuser+"\ncontent: "+newPost[2]+"\npost: "+newPost[3]
 			try:
 				# trailing '!' denotes NSFW post now, can't happen otherwise since it'd make an invalid url
 				if newPost[-1][0] == '!':

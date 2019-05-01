@@ -150,10 +150,12 @@ class RedditBot():
 				if not post.id in self.redditCache[3]:
 					wasChanged = True
 					self.redditCache[3].append(str(post.id))
+					postData = [post.title, post.author.name, post.url, post.shortlink]
 					if post.over_18:
-						self.postQueue.put([post.title, post.author.name, post.url, post.shortlink, '!'])
-					else:
-						self.postQueue.put([post.title, post.author.name, post.url, post.shortlink])
+						postData.append('!')
+					if post.spoiler:
+						postData.append('?')
+					self.postQueue.put(postData)
 					l = len(self.redditCache[3])
 					if l >= 40:
 						self.redditCache[3] = self.redditCache[3][l-30:]
