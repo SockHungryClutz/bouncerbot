@@ -22,11 +22,11 @@ class RedditBot():
 							user_agent=config['reddit_creds']['user_agent'])
 		self.sr = self.r.subreddit(config['general']['subreddit'])
 		
-		self.REDDIT_REFRESH_RATE = int(config['general']['reddit_new_refresh'])
-		self.TOP_REFRESH_RATE = int(config['general']['reddit_top_refresh'])
-		self.SNOOPSNOO_REFRESH_RATE = int(config['general']['snoop_snoo_refresh'])
-		self.EXIT_POLL_RATE = int(config['general']['reddit_exit_refresh'])
-		self.CYCLES_IN_REVIEW = config['general']['review_cycles']
+		self.REDDIT_REFRESH_RATE = int(config['timing']['reddit_new_refresh'])
+		self.TOP_REFRESH_RATE = int(config['timing']['reddit_top_refresh'])
+		self.SNOOPSNOO_REFRESH_RATE = int(config['timing']['snoop_snoo_refresh'])
+		self.EXIT_POLL_RATE = int(config['timing']['reddit_exit_refresh'])
+		self.CYCLES_IN_REVIEW = config['timing']['review_cycles']
 		self.MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
 		self.REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
 		

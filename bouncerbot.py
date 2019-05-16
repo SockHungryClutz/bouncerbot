@@ -33,7 +33,7 @@ bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - He
 config = configparser.ConfigParser()
 config.read('botconfig.ini')
 token = config['discord_creds']['token']
-queuePoll = int(config['general']['discord_queue_poll'])
+queuePoll = int(config['timing']['discord_queue_poll'])
 logname = config['logging']['discord_log_name']
 filesizemax = int(config['logging']['max_file_size'])
 numlogsmax = int(config['logging']['max_number_logs'])
@@ -229,6 +229,17 @@ async def check_file_queue():
 async def on_ready():
 	await bot.change_presence(activity=discord.Game(name='b.help for commands', type=1))
 	logger.info('Discord log in success!')
+
+# overwrite the on_message handler to accept DM's
+@bot.event
+async def on_message(message):
+	# isinstance is poor form, but what're you going to do?
+	if isinstance(message.channel, discord.DMChannel):
+		# just testing, send replies so I can see them
+		await message.channel.send("Hello There")
+		await bot.get_channel(findChannel(config['general']['dm_channel'])).send("I got a DM! ^w^ it says:\n" + message.content)
+	else:
+		await bot.process_commands(message)
 
 # check that's pretty useful
 async def is_admin(ctx):
@@ -437,6 +448,41 @@ async def sendlists(ctx):
 		discord.File('usermap.txt', 'PingList.txt'),
 	]
 	await ctx.send(files=list_files)
+
+# admin command to message a user on behalf of the admins
+@bot.command()
+@commands.check(is_admin)
+async def sendmessage(ctx, *args):
+	"""Message a user on behalf of the mods (mods only)"""
+	if len(args) <= 0:
+		await ctx.send("You need to specify a discord user and message!\neg. `b.sendmessage SimStart \"good bot\"`")
+	elif len(args > 2):
+		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendmessage SimStart \"good bot\"`")
+	else:
+		usr = ctx.guild.get_member_named(args[0])
+		if usr not None:
+			dm_chan = usr.dm_channel
+			if dm_chan == None:
+				dm_chan = await usr.create_dm()
+			if dm_chan != None:
+				await dm_chan.send(args[1])
+			else:
+				await ctx.send("Failed to open DM channel! Try again!")
+				logger.warning("sendmessage failed: could not slide into DM's!")
+		else:
+			await ctx.send("Could not find the user, either use their display name or their discord identifier (username#1234)")
+
+# admin command to post an announcement
+@bot.command()
+@commands.check(is_admin)
+async def sendannouncement(ctx, *args):
+	"""Make an announcement (mods only)"""
+	if len(args) <= 0:
+		await ctx.send("You need to write a message!\neg. `b.sendannouncement \"Don't Panic! this is just a test!\"`")
+	elif len(args > 1):
+		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendannouncement \"Don't Panic! this is just a test!\"`")
+	else:
+		await bot.get_channel(findChannel(config['general']['mod_announce_channel'])).send(content=args[0], embed=None)
 
 # super-secret command to DM the current cache and settings for the bot
 # THIS WILL SEND THE API KEY INFORMATION TOO, MAKE SURE YOUR USERNAME IS FIRST ON PING LIST
