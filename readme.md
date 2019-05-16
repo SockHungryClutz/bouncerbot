@@ -9,11 +9,11 @@ Helper bot for the Furry Shitposting Guild
 * [Python](https://www.python.org/downloads/release/python-366/) 3.4-3.6 (3.7+ **MIGHT** work)  
 * Use [pip](https://pypi.org/project/pip/) to install the following:  
   * [requests](https://pypi.org/project/requests/)  
-  * [discord-rewrite](https://pypi.org/project/discord-rewrite/) (**NOT** discord.py)  
+  * [discord.py](https://pypi.org/project/discord.py/) (V 1.1 or greater)  
   * [praw](https://pypi.org/project/praw/) (V6.1.0 or greater for spoiler support!)  
 * Everything else should be installed with the other packages
 
-**NOTE**: you will have to use `pip install git+https://github.com/Rapptz/discord.py@rewrite` to install discord-rewrite, the version on pypi has issues
+**NOTE**: As of discord.py 1.0.0 or so, use the discord.py repository and not discord-rewrite!
 
 -----
 
@@ -33,6 +33,9 @@ Be sure to invite the bot using the app id from discord and permissions that all
 
 Navigate to the directory that contains this project in a command, powershell, or terminal window, and run:  
 `python bouncerbot.py`
+
+To run this headless, use the following command in a bash terminal:
+`nohup python3 bouncerbot.py & disown`
 
 The bot will print a startup message, and all future messages will be logged as long as it's a non-fatal error.
 

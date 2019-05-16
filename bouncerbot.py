@@ -25,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.4.3'
+VERSION = '2.-.-'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -449,7 +449,9 @@ async def sendCache(ctx):
 		discord.File('redditcache.txt', 'redditcache.txt'),
 		discord.File('botconfig.ini', 'botconfig.ini'),
 	]
-	dm_chan = await get_dm_channel(ctx.author)
+	dm_chan = ctx.author.dm_channel
+	if dm_chan == None:
+		dm_chan = await ctx.author.create_dm()
 	if dm_chan != None:
 		await dm_chan.send(files=cache_files)
 	else:
@@ -466,7 +468,9 @@ async def sendLogs(ctx):
 		discord.File('RedditLog.log', 'RedditLog.txt'),
 		discord.File('DiscordLog.log', 'DiscordLog.txt'),
 	]
-	dm_chan = await get_dm_channel(ctx.author)
+	dm_chan = ctx.author.dm_channel
+	if dm_chan == None:
+		dm_chan = await ctx.author.create_dm()
 	if dm_chan != None:
 		await dm_chan.send(files=log_files)
 	else:
