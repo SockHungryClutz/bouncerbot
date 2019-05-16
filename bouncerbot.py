@@ -233,13 +233,15 @@ async def on_ready():
 # overwrite the on_message handler to accept DM's
 @bot.event
 async def on_message(message):
-	# isinstance is poor form, but what're you going to do?
-	if isinstance(message.channel, discord.DMChannel):
-		# just testing, send replies so I can see them
-		await message.channel.send("Hello There")
-		await bot.get_channel(findChannel(config['general']['dm_channel'])).send("I got a DM! ^w^ it says:\n" + message.content)
-	else:
-		await bot.process_commands(message)
+	# ignore other bots I guess
+	if message.author.bot:
+		# isinstance is poor form, but what're you going to do?
+		if isinstance(message.channel, discord.DMChannel):
+			# just testing, send replies so I can see them
+			await message.channel.send("Hello There")
+			await bot.get_channel(findChannel(config['general']['dm_channel'])).send("I got a DM! ^w^ it says:\n" + message.content)
+		else:
+			await bot.process_commands(message)
 
 # check that's pretty useful
 async def is_admin(ctx):
@@ -460,7 +462,7 @@ async def sendmessage(ctx, *args):
 		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendmessage SimStart \"good bot\"`")
 	else:
 		usr = ctx.guild.get_member_named(args[0])
-		if usr not None:
+		if usr != None:
 			dm_chan = usr.dm_channel
 			if dm_chan == None:
 				dm_chan = await usr.create_dm()
