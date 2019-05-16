@@ -234,12 +234,13 @@ async def on_ready():
 @bot.event
 async def on_message(message):
 	# ignore other bots I guess
-	if message.author.bot:
+	if not message.author.bot:
 		# isinstance is poor form, but what're you going to do?
 		if isinstance(message.channel, discord.DMChannel):
-			# just testing, send replies so I can see them
-			await message.channel.send("Hello There")
-			await bot.get_channel(findChannel(config['general']['dm_channel'])).send("I got a DM! ^w^ it says:\n" + message.content)
+			# TODO: create a map of DM channels, add b.reply to reply to DMs
+			# parse message to anonymize messages
+			logger.info("Received message from " + message.author.name)
+			await bot.get_channel(findChannel(config['general']['dm_channel'])).send("From: " + message.author.name + "\n" + message.content)
 		else:
 			await bot.process_commands(message)
 
@@ -458,16 +459,16 @@ async def sendmessage(ctx, *args):
 	"""Message a user on behalf of the mods (mods only)"""
 	if len(args) <= 0:
 		await ctx.send("You need to specify a discord user and message!\neg. `b.sendmessage SimStart \"good bot\"`")
-	elif len(args > 2):
+	elif len(args) > 2:
 		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendmessage SimStart \"good bot\"`")
 	else:
+		logger.info("b.sendmessage called by: " + ctx.author.name + " ; " + args[0] + " ; " + args[1])
 		usr = ctx.guild.get_member_named(args[0])
 		if usr != None:
-			dm_chan = usr.dm_channel
-			if dm_chan == None:
-				dm_chan = await usr.create_dm()
+			dm_chan = get_dm_channel(usr)
 			if dm_chan != None:
 				await dm_chan.send(args[1])
+				await ctx.send("Message sent! :e_mail:")
 			else:
 				await ctx.send("Failed to open DM channel! Try again!")
 				logger.warning("sendmessage failed: could not slide into DM's!")
@@ -477,14 +478,16 @@ async def sendmessage(ctx, *args):
 # admin command to post an announcement
 @bot.command()
 @commands.check(is_admin)
-async def sendannouncement(ctx, *args):
+async def announce(ctx, *args):
 	"""Make an announcement (mods only)"""
 	if len(args) <= 0:
 		await ctx.send("You need to write a message!\neg. `b.sendannouncement \"Don't Panic! this is just a test!\"`")
-	elif len(args > 1):
+	elif len(args) > 1:
 		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendannouncement \"Don't Panic! this is just a test!\"`")
 	else:
+		logger.info("b.announce called by: " + ctx.author.name)
 		await bot.get_channel(findChannel(config['general']['mod_announce_channel'])).send(content=args[0], embed=None)
+		await ctx.send("Announcement posted! :loudspeaker:")
 
 # super-secret command to DM the current cache and settings for the bot
 # THIS WILL SEND THE API KEY INFORMATION TOO, MAKE SURE YOUR USERNAME IS FIRST ON PING LIST
@@ -497,9 +500,7 @@ async def sendCache(ctx):
 		discord.File('redditcache.txt', 'redditcache.txt'),
 		discord.File('botconfig.ini', 'botconfig.ini'),
 	]
-	dm_chan = ctx.author.dm_channel
-	if dm_chan == None:
-		dm_chan = await ctx.author.create_dm()
+	dm_chan = get_dm_channel(ctx.author)
 	if dm_chan != None:
 		await dm_chan.send(files=cache_files)
 	else:
@@ -516,9 +517,7 @@ async def sendLogs(ctx):
 		discord.File('RedditLog.log', 'RedditLog.txt'),
 		discord.File('DiscordLog.log', 'DiscordLog.txt'),
 	]
-	dm_chan = ctx.author.dm_channel
-	if dm_chan == None:
-		dm_chan = await ctx.author.create_dm()
+	dm_chan = get_dm_channel(ctx.author)
 	if dm_chan != None:
 		await dm_chan.send(files=log_files)
 	else:
