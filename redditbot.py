@@ -32,6 +32,7 @@ class RedditBot():
 		
 		self.acceptQueue = queueList[0]
 		self.postQueue = queueList[1]
+		self.configQueue = queueList[2]
 		
 		# Start the logger
 		self.logger = RollingLogger_Async(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']), int(config['logging']['log_verbosity']))
@@ -50,6 +51,12 @@ class RedditBot():
 	
 	# Whether or not a user meets the requirements
 	def isQualified(self, subKarma, comKarma):
+		while not self.configQueue.empty():
+			c = self.configQueue.get()
+			if c[0] == "total_karma_required":
+				self.REQUIRED_KARMA_TOTAL = int(c[1])
+			elif c[0] == "max_comment_karma":
+				self.MAX_COMMENT_KARMA = int(c[1])
 		if comKarma > self.MAX_COMMENT_KARMA:
 			c = self.MAX_COMMENT_KARMA
 		else:

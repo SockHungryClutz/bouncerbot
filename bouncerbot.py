@@ -31,16 +31,18 @@ bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - He
 
 # Read configuration
 config = configparser.ConfigParser()
-config.read('botconfig.ini')
-token = config['discord_creds']['token']
-queuePoll = int(config['timing']['discord_queue_poll'])
-logname = config['logging']['discord_log_name']
-filesizemax = int(config['logging']['max_file_size'])
-numlogsmax = int(config['logging']['max_number_logs'])
-logVerbosity = int(config['logging']['log_verbosity'])
-subreddit = config['general']['subreddit']
-MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
-REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
+def reloadConfig():
+	config.read('botconfig.ini')
+	token = config['discord_creds']['token']
+	queuePoll = int(config['timing']['discord_queue_poll'])
+	logname = config['logging']['discord_log_name']
+	filesizemax = int(config['logging']['max_file_size'])
+	numlogsmax = int(config['logging']['max_number_logs'])
+	logVerbosity = int(config['logging']['log_verbosity'])
+	subreddit = config['general']['subreddit']
+	MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
+	REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
+reloadConfig()
 realCleanShutDown = False
 p = None
 
@@ -53,7 +55,8 @@ userMap = FileParser.parseFile("usermap.txt", True)
 # Create the queues the processes will use to communicate
 newUserQueue = Queue()
 newPostQueue = Queue()
-queueList = [newUserQueue, newPostQueue]
+configQueue = Queue()
+queueList = [newUserQueue, newPostQueue, configQueue]
 # Extra stuff for the check file process
 filesAwaited = 0
 fileQueue = Queue()
@@ -194,6 +197,7 @@ async def check_post_queue():
 				logger.error("Failed to send post message!\n" + str(e))
 		if closeDiscord:
 			# all other queues should be closed by the reddit side
+			configQueue.close()
 			logger.info("Discord process is shutting down now")
 			realCleanShutDown = True
 			p.join()
@@ -237,15 +241,6 @@ async def on_message(message):
 	if not message.author.bot:
 		# isinstance is poor form, but what're you going to do?
 		if isinstance(message.channel, discord.DMChannel):
-			# TODO: reply and mute/unmute
-			# Unmute algorithm:
-			# check params
-			# check if idx is valid
-			# get DM key from userMap[2]
-			# ensure key in userMap[3]
-			# remove from userMap[3] (see ping remove)
-			# write out userMap
-			# print success
 			logger.info("Received message from " + message.author.name + " ; " + message.id)
 			if message.content[:4].lower() == "anon":
 				key = str(message.author.id) + "anon"
@@ -262,6 +257,8 @@ async def on_message(message):
 					FileParser.writeNestedList("usermap.txt", userMap, 'w')
 				mail = "From: "+auth+"\n(reply with `b.reply "+idx+" \"message here\"`, mute with `b.mute "+idx+"`)\n"+message.content
 				await bot.get_channel(findChannel(config['general']['dm_channel'])).send(mail)
+			else:
+				await message.channel.send("You are currently muted, DM the mods directly to appeal your mute")
 		else:
 			await bot.process_commands(message)
 
@@ -590,6 +587,26 @@ async def announce(ctx, *args):
 		logger.info("b.announce called by: " + ctx.author.name)
 		await bot.get_channel(findChannel(config['general']['mod_announce_channel'])).send(content=args[0], embed=None)
 		await ctx.send("Announcement posted! :loudspeaker:")
+
+# set a configuration value from a command
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def config(ctx, *args):
+	if len(args) <= 1:
+		await ctx.send("You need to specify a key and value!\neg. `b.config total_karma_required 15000`")
+	elif len(args) > 2:
+		await ctx.send("Too many arguments! You only need a key and value!\neg. `b.reply total_karma_required 15000`")
+	else:
+		logger.info("b.config called by " + ctx.author.name + " ; " + args[0])
+		if args[0] in config['general'] and not args[0] == "subreddit":
+			config['general'][args[0]] = args[1]
+			configQueue.put([args[0], args[1]])
+			with open('botconfig.ini', 'w') as ini:
+				config.write(ini)
+			reloadConfig()
+			await ctx.send("Config updated, "+args[0]+" = "+args[1])
+		else:
+			ctx.send("Not a valid config key, see https://github.com/SockHungryClutz/bouncerbot/blob/master/botconfig.ini")
 
 # super-secret command to DM the current cache and settings for the bot
 # THIS WILL SEND THE API KEY INFORMATION TOO, MAKE SURE YOUR USERNAME IS FIRST ON PING LIST
