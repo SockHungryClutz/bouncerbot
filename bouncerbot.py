@@ -47,7 +47,7 @@ p = None
 # Get the accepted users list
 aul = FileParser.parseFile("acceptedusers.txt", False)
 
-# Mapping of reddit usernames to discord id's
+# Mapping of reddit usernames to discord id's and DM channels
 userMap = FileParser.parseFile("usermap.txt", True)
 
 # Create the queues the processes will use to communicate
@@ -237,33 +237,31 @@ async def on_message(message):
 	if not message.author.bot:
 		# isinstance is poor form, but what're you going to do?
 		if isinstance(message.channel, discord.DMChannel):
-			# TODO: create a map of DM channels, add b.reply to reply to DMs
-			# parse message to anonymize messages
-			# Algorithm:
-			# (succeed checks above)
-			# if msg[:4].lower() == "anon"
-			#   key = str(author.id) + "anon"
-			#   auth = "Anonymous User"
-			# else
-			#   key = str(author.id)
-			#   auth = author.name
-			# if key in DmMap[0]
-			#   idx = DmMap[0].index(key)
-			# else
-			#   idx = len(DmMap)
-			#   DmMap.append(key)
-			# mail = "From: "+auth+"\n(Reply with `b.reply "+idx+' "message here"`)\n'+msg
-			# send mail to DM channel
-			#==============================
-			# reply algorithm:
-			# check parameters
+			# TODO: reply and mute/unmute
+			# Unmute algorithm:
+			# check params
 			# check if idx is valid
-			# get user id from DmMap (truncate "anon")
-			# get user from id
-			# attempt to send message
-			# print if succeeded or failed
-			logger.info("Received message from " + message.author.name)
-			await bot.get_channel(findChannel(config['general']['dm_channel'])).send("From: " + message.author.name + "\n" + message.content)
+			# get DM key from userMap[2]
+			# ensure key in userMap[3]
+			# remove from userMap[3] (see ping remove)
+			# write out userMap
+			# print success
+			logger.info("Received message from " + message.author.name + " ; " + message.id)
+			if message.content[:4].lower() == "anon":
+				key = str(message.author.id) + "anon"
+				auth = "Anonymous User"
+			else:
+				key = str(message.author.id)
+				auth = message.author.name
+			if not (key in userMap[3]):
+				if key in userMap[2]:
+					idx = userMap[2].index(key)
+				else:
+					idx = len(userMap[2])
+					userMap[2].append(key)
+					FileParser.writeNestedList("usermap.txt", userMap, 'w')
+				mail = "From: "+auth+"\n(reply with `b.reply "+idx+" \"message here\"`, mute with `b.mute "+idx+"`)\n"+message.content
+				await bot.get_channel(findChannel(config['general']['dm_channel'])).send(mail)
 		else:
 			await bot.process_commands(message)
 
@@ -438,6 +436,25 @@ async def remove(ctx, redditname: str=None):
 		FileParser.writeNestedList("usermap.txt", userMap, 'w')
 		await ctx.send("Removed "+str(num)+" instances of "+fixUsername(redditname)+" from the ping list :thumbsup:")
 
+# mod only command to show mod commands, viewable from b.help
+@bot.command()
+@commands.check(is_admin)
+async def modhelp(ctx):
+	"""Shows moderator commands (mods only)"""
+	logger.info("b.modhelp called")
+	await ctx.send("""```
+	Super-Special mod-only commands
+	(use "b.<command>" to give one of the following commands)
+	
+	sendlists   Send the lists of accepted and pingable users
+	sendmessage Send a DM on behalf of the moderators
+	announce    Make an announcement on behalf of the moderators
+	reply       Reply to a recieved modmail DM
+	mute        Mute all modmail DMs from a user
+	unmute      Undo a mute
+	config      Set a config value for this bot
+	```""")
+
 # secret command to send the current user lists
 @bot.command(hidden=True)
 @commands.check(is_admin)
@@ -451,11 +468,11 @@ async def sendlists(ctx):
 	await ctx.send(files=list_files)
 
 # admin command to message a user on behalf of the admins
-@bot.command()
+@bot.command(hidden=True)
 @commands.check(is_admin)
 async def sendmessage(ctx, *args):
 	"""Message a user on behalf of the mods (mods only)"""
-	if len(args) <= 0:
+	if len(args) <= 1:
 		await ctx.send("You need to specify a discord user and message!\neg. `b.sendmessage SimStart \"good bot\"`")
 	elif len(args) > 2:
 		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendmessage SimStart \"good bot\"`")
@@ -465,16 +482,103 @@ async def sendmessage(ctx, *args):
 		if usr != None:
 			dm_chan = get_dm_channel(usr)
 			if dm_chan != None:
-				await dm_chan.send(args[1])
-				await ctx.send("Message sent! :e_mail:")
+				success = True
+				try:
+					await dm_chan.send(args[1])
+				except BaseException as e:
+					success = False
+				if success:
+					await ctx.send("Message sent! :e_mail:")
+				else:
+					await ctx.send("Could not send message, user not in server or is blocking me!")
 			else:
 				await ctx.send("Failed to open DM channel! Try again!")
 				logger.warning("sendmessage failed: could not slide into DM's!")
 		else:
 			await ctx.send("Could not find the user, either use their display name or their discord identifier (username#1234)")
 
+# reply to a modmail DM
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def reply(ctx, *args):
+	"""Reply to a modmail DM (mods only)"""
+	if len(args) <= 1:
+		await ctx.send("You need to specify an ID and message!\neg. `b.reply 0 \"hello\"`")
+	elif len(args) > 2:
+		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.reply 0 \"hello\"`")
+	else:
+		logger.info("b.reply called by " + ctx.author.name + " ; " + args[0])
+		try:
+			idx = int(args[0])
+		except BaseException as e:
+			await ctx.send(args[0] + " is not a valid index! try again")
+			return
+		if len(userMap[2]) <= idx:
+			await ctx.send(args[0] + " is not a valid index! try again")
+		else:
+			id = userMap[2][idx]
+			if id[-4:] == "anon":
+				id = id[:-4]
+			try:
+				dm_chan = get_dm_channel(bot.get_user(int(id)))
+				if dm_chan != None:
+					await dm_chan.send(args[1])
+					await ctx.send("Message sent! :e_mail:")
+				else:
+					await ctx.send("Failed to open DM channel! Try again!")
+			except BaseException as e:
+				await ctx.send("Could not send message, user not in server or is blocking me!")
+
+# mute DMs from a user
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def mute(ctx, *args):
+	"""Mute all modmail DMs from a user (mods only)"""
+	if len(args) < 1:
+		await ctx.send("You need to specify an ID!\neg. `b.mute 0`")
+	else:
+		logger.info("b.mute called by " + ctx.author.name + " ; " + args[0])
+		try:
+			idx = int(args[0])
+		except BaseException as e:
+			await ctx.send(args[0] + " is not a valid index! try again")
+			return
+		if len(userMap[2]) <= idx:
+			await ctx.send(args[0] + " is not a valid index! try again")
+		else:
+			id = userMap[2][idx]
+			userMap[3].append(id)
+			FileParser.writeNestedList("usermap.txt", userMap, 'w')
+			await ctx.send("Ignoring DMs from User ID " + str(id) + ":thumbsup:")
+
+# unmute DMs from a user
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def unmute(ctx, *args):
+	"""Undo a mute (mods only)"""
+	if len(args) < 1:
+		await ctx.send("You need to specify an ID!\neg. `b.unmute 0`")
+	else:
+		logger.info("b.unmute called by " + ctx.author.name + " ; " + args[0])
+		try:
+			idx = int(args[0])
+		except BaseException as e:
+			await ctx.send(args[0] + " is not a valid index! try again")
+			return
+		if len(userMap[2]) <= idx:
+			await ctx.send(args[0] + " is not a valid index! try again")
+		else:
+			id = userMap[2][idx]
+			if id in userMap[3]:
+				midx = userMap[3].index(id)
+				userMap[3].pop(midx)
+				FileParser.writeNestedList("usermap.txt", userMap, 'w')
+				await ctx.send("Unmuting DMs from User ID " + str(idx) + ":thumbsup:")
+			else:
+				await ctx.send("User ID " + str(idx) + " is not currently muted")
+
 # admin command to post an announcement
-@bot.command()
+@bot.command(hidden=True)
 @commands.check(is_admin)
 async def announce(ctx, *args):
 	"""Make an announcement (mods only)"""
