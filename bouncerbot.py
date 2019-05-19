@@ -21,7 +21,7 @@ import time
 from datetime import datetime
 from multiprocessing import Process, Queue, Manager
 import redditbot
-from sherlockblockspring import BlockSpringAPI
+from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
@@ -303,7 +303,7 @@ async def check_user(username, ctx):
 	if ctx != None:
 		logger.info("user needed refresh...")
 		await ctx.send("Give me a minute while I refresh " + fixUsername(username) + "'s profile...")
-	ref,usr = await BlockSpringAPI.async_refreshUser(username)
+	ref,usr = await SnoopSnooAPI.async_refreshSnoop(username)
 	if ref.find("EXCEPTION") == 0:
 		# some server side exception, tell user not to panic
 		if ctx != None:
@@ -319,7 +319,7 @@ async def check_user(username, ctx):
 		name = usr['data']['username']
 		totalC = usr['data']['summary']['comments']['all_time_karma']
 		totalS = usr['data']['summary']['submissions']['all_time_karma']
-		firl = BlockSpringAPI.getSubredditActivity(username, subreddit, ref)
+		firl = SnoopSnooAPI.getSubredditActivity(username, subreddit, ref)
 		if firl != None:
 			firlC = firl["comment_karma"]
 			firlK = firl["submission_karma"]
