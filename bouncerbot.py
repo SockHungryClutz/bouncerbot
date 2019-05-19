@@ -21,7 +21,7 @@ import time
 from datetime import datetime
 from multiprocessing import Process, Queue, Manager
 import redditbot
-from snoopsnoo import SnoopSnooAPI
+from sherlockblockspring import BlockSpringAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
@@ -171,7 +171,7 @@ async def check_post_queue():
 			logger.info("added post: "+newPost[1]+' ; '+newPost[2]+' ; '+newPost[3])
 			if newPost[1].lower() in userMap[0]:
 				uidx = userMap[0].index(newPost[1].lower())
-				duser = await bot.get_user_info(userMap[1][uidx])
+				duser = await bot.fetch_user(int(userMap[1][uidx]))
 				realuser = duser.mention + " (" + fixUsername(newPost[1]) + ")"
 			else:
 				realuser = fixUsername(newPost[1])
@@ -239,6 +239,29 @@ async def on_message(message):
 		if isinstance(message.channel, discord.DMChannel):
 			# TODO: create a map of DM channels, add b.reply to reply to DMs
 			# parse message to anonymize messages
+			# Algorithm:
+			# (succeed checks above)
+			# if msg[:4].lower() == "anon"
+			#   key = str(author.id) + "anon"
+			#   auth = "Anonymous User"
+			# else
+			#   key = str(author.id)
+			#   auth = author.name
+			# if key in DmMap[0]
+			#   idx = DmMap[0].index(key)
+			# else
+			#   idx = len(DmMap)
+			#   DmMap.append(key)
+			# mail = "From: "+auth+"\n(Reply with `b.reply "+idx+' "message here"`)\n'+msg
+			# send mail to DM channel
+			#==============================
+			# reply algorithm:
+			# check parameters
+			# check if idx is valid
+			# get user id from DmMap (truncate "anon")
+			# get user from id
+			# attempt to send message
+			# print if succeeded or failed
 			logger.info("Received message from " + message.author.name)
 			await bot.get_channel(findChannel(config['general']['dm_channel'])).send("From: " + message.author.name + "\n" + message.content)
 		else:
@@ -270,58 +293,33 @@ async def get_dm_channel(auth):
 
 # Async function check a single reddit user, returns a code for success/failure
 async def check_user(username, ctx):
-	usrS = await SnoopSnooAPI.async_getUserJSON(username)
-	usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
+	ref = ""
+	usr = None
 	totalC = 0
 	totalS = 0
 	firlC = 0
 	firlK = 0
 	# some default value to prevent errors
-	updTime = ""
-	needRefresh = False
-	name = username
-	try:
-		errCode = usr['error']
-		if errCode == 404:
-			# there was an error, try refreshing the user
-			needRefresh = True
-	except KeyError as e:
-		# this means that all's good, do the rest of the stuff
-		pass
-	# Check the time of the last refresh
-	if not needRefresh:
-		updTime = usr['data']['metadata']['last_updated']
-		uT = datetime.strptime(updTime, "%a, %d %b %Y %X %Z")
-		nT = datetime.utcnow()
-		dT = (nT - uT).total_seconds()
-		if dT >= 14400:
-			needRefresh = True
-	if needRefresh:
+	if ctx != None:
+		logger.info("user needed refresh...")
+		await ctx.send("Give me a minute while I refresh " + fixUsername(username) + "'s profile...")
+	ref,usr = await BlockSpringAPI.async_refreshUser(username)
+	if ref.find("EXCEPTION") == 0:
+		# some server side exception, tell user not to panic
 		if ctx != None:
-			logger.info("user needed refresh...")
-			await ctx.send("Give me a minute while I refresh " + fixUsername(username) + "'s profile...")
-		ref = await SnoopSnooAPI.async_refreshSnoop(username)
-		if ref == "OK":
-			# all is good, get the new user info
-			usrS = await SnoopSnooAPI.async_getUserJSON(username)
-			usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
-		elif ref.find("EXCEPTION") == 0:
-			# some server side exception, tell user not to panic
-			if ctx != None:
-				logger.warning("snoopsnoo error: " + ref)
-			return -1,totalC,totalS,firlC,firlK,updTime
-		else:
-			# something went wrong, say something and return
-			if ctx != None:
-				logger.warning("refresh error: " + ref)
-			return -2,totalC,totalS,firlC,firlK,updTime
+			logger.warning("snoopsnoo error: " + ref)
+		return -1,totalC,totalS,firlC,firlK,updTime
+	elif ref.find("ERROR") == 0:
+		# something went wrong, say something and return
+		if ctx != None:
+			logger.warning("refresh error: " + ref)
+		return -2,totalC,totalS,firlC,firlK,updTime
 	try:
 		updTime = usr['data']['metadata']['last_updated']
 		name = usr['data']['username']
 		totalC = usr['data']['summary']['comments']['all_time_karma']
 		totalS = usr['data']['summary']['submissions']['all_time_karma']
-		# async doesn't matter when string is provided
-		firl = SnoopSnooAPI.getSubredditActivity(username, subreddit, usrS)
+		firl = BlockSpringAPI.getSubredditActivity(username, subreddit, ref)
 		if firl != None:
 			firlC = firl["comment_karma"]
 			firlK = firl["submission_karma"]

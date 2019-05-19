@@ -2,7 +2,7 @@
 import praw
 import time
 import asyncio
-from snoopsnoo import SnoopSnooAPI
+from sherlockblockspring import BlockSpringAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
@@ -56,9 +56,9 @@ class RedditBot():
 			c = comKarma
 		return (subKarma + c >= self.REQUIRED_KARMA_TOTAL)
 	
-	# Async - Checks whether a user meets the requirements using snoopsnoo
-	async def async_isQualifiedSnoop(self, user):
-		jd = await SnoopSnooAPI.async_getSubredditActivity(user, self.sr.display_name)
+	# Checks whether a user meets the requirements using snoopsnoo
+	def isQualifiedUser(self, user, str):
+		jd = BlockSpringAPI.getSubredditActivity(user, self.sr.display_name, str)
 		if jd != None:
 			skarma = jd["submission_karma"]
 			ckarma = jd["comment_karma"]
@@ -174,8 +174,8 @@ class RedditBot():
 			u = 0
 			while u < len(self.redditCache[1]):
 				usr = self.redditCache[1][u]
-				res = await SnoopSnooAPI.async_refreshSnoop(usr)
-				if res != "OK":
+				res,usrobj = await BlockSpringAPI.async_refreshUser(usr)
+				if res.find("ERROR") == 0 or ref.find("EXCEPTION") == 0:
 					# See if the user exists, may be deleted or banned
 					ru = self.r.redditor(usr)
 					try:
@@ -187,7 +187,7 @@ class RedditBot():
 							self.redditCache[1].pop(u)
 							self.redditCache[2].pop(u)
 				else:
-					if await self.async_isQualifiedSnoop(usr):
+					if self.isQualifiedUser(usr, res):
 						wasChanged = True
 						self.logger.info("CONGRATULATIONS!! " + usr + " is qualified to join!")
 						# Add user to queue so discord side can announce it
