@@ -41,6 +41,7 @@ subreddit = ''
 MAX_COMMENT_KARMA = 0
 REQUIRED_KARMA_TOTAL = 10000
 def reloadConfig():
+	global config, token, queuePoll, logname, filesizemax, numlogsmax, logVerbosity, subreddit, MAX_COMMENT_KARMA, REQUIRED_KARMA_TOTAL
 	config.read('botconfig.ini')
 	token = config['discord_creds']['token']
 	queuePoll = int(config['timing']['discord_queue_poll'])
@@ -600,13 +601,14 @@ async def announce(ctx, *args):
 # set a configuration value from a command
 @bot.command(hidden=True)
 @commands.check(is_admin)
-async def config(ctx, *args):
+async def configure(ctx, *args):
+	global config
 	if len(args) <= 1:
-		await ctx.send("You need to specify a key and value!\neg. `b.config total_karma_required 15000`")
+		await ctx.send("You need to specify a key and value!\neg. `b.configure total_karma_required 15000`")
 	elif len(args) > 2:
-		await ctx.send("Too many arguments! You only need a key and value!\neg. `b.reply total_karma_required 15000`")
+		await ctx.send("Too many arguments! You only need a key and value!\neg. `b.configure total_karma_required 15000`")
 	else:
-		logger.info("b.config called by " + ctx.author.name + " ; " + args[0])
+		logger.info("b.configure called by " + ctx.author.name + " ; " + args[0])
 		if args[0] in config['general'] and not args[0] == "subreddit":
 			config['general'][args[0]] = args[1]
 			configQueue.put([args[0], args[1]])
