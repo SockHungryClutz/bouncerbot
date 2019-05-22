@@ -255,9 +255,11 @@ async def on_message(message):
 			if message.content[:4].lower() == "anon":
 				key = str(message.author.id) + "anon"
 				auth = "Anonymous User"
+				msg = message.content[4:]
 			else:
 				key = str(message.author.id)
 				auth = message.author.name
+				msg = message.content
 			if not (key in userMap[3]):
 				if key in userMap[2]:
 					idx = userMap[2].index(key)
@@ -265,7 +267,7 @@ async def on_message(message):
 					idx = len(userMap[2])
 					userMap[2].append(key)
 					FileParser.writeNestedList("usermap.txt", userMap, 'w')
-				mail = "From: "+auth+"\n(reply with `b.reply "+str(idx)+" \"message here\"`, mute with `b.mute "+str(idx)+"`)\n"+message.content
+				mail = "From: "+auth+"\n(reply with `b.reply "+str(idx)+" \"message here\"`, mute with `b.mute "+str(idx)+"`)\n\n"+msg
 				await bot.get_channel(findChannel(config['general']['dm_channel'])).send(mail)
 			else:
 				await message.channel.send("You are currently muted, DM the mods directly to appeal your mute")
@@ -556,7 +558,7 @@ async def mute(ctx, *args):
 			id = userMap[2][idx]
 			userMap[3].append(id)
 			FileParser.writeNestedList("usermap.txt", userMap, 'w')
-			await ctx.send("Ignoring DMs from User ID " + str(id) + ":thumbsup:")
+			await ctx.send("Ignoring DMs from User ID " + str(idx) + ":thumbsup:")
 
 # unmute DMs from a user
 @bot.command(hidden=True)
