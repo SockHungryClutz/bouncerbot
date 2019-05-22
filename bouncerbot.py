@@ -29,8 +29,17 @@ VERSION = '2.-.-'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
-# Read configuration
+# Read configuration, default global values
 config = configparser.ConfigParser()
+token = ''
+queuePoll = 60
+logname = ''
+filesizemax = 8000
+numlogsmax = 5
+logVerbosity = 4
+subreddit = ''
+MAX_COMMENT_KARMA = 0
+REQUIRED_KARMA_TOTAL = 10000
 def reloadConfig():
 	config.read('botconfig.ini')
 	token = config['discord_creds']['token']
