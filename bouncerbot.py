@@ -251,7 +251,7 @@ async def on_message(message):
 	if not message.author.bot:
 		# isinstance is poor form, but what're you going to do?
 		if isinstance(message.channel, discord.DMChannel):
-			logger.info("Received message from " + message.author.name + " ; " + message.id)
+			logger.info("Received message from " + message.author.name + " ; " + str(message.id))
 			if message.content[:4].lower() == "anon":
 				key = str(message.author.id) + "anon"
 				auth = "Anonymous User"
@@ -487,7 +487,7 @@ async def sendmessage(ctx, *args):
 		logger.info("b.sendmessage called by: " + ctx.author.name + " ; " + args[0] + " ; " + args[1])
 		usr = ctx.guild.get_member_named(args[0])
 		if usr != None:
-			dm_chan = get_dm_channel(usr)
+			dm_chan = await get_dm_channel(usr)
 			if dm_chan != None:
 				success = True
 				try:
@@ -527,7 +527,7 @@ async def reply(ctx, *args):
 			if id[-4:] == "anon":
 				id = id[:-4]
 			try:
-				dm_chan = get_dm_channel(bot.get_user(int(id)))
+				dm_chan = await get_dm_channel(bot.get_user(int(id)))
 				if dm_chan != None:
 					await dm_chan.send(args[1])
 					await ctx.send("Message sent! :e_mail:")
@@ -630,7 +630,7 @@ async def sendCache(ctx):
 		discord.File('redditcache.txt', 'redditcache.txt'),
 		discord.File('botconfig.ini', 'botconfig.ini'),
 	]
-	dm_chan = get_dm_channel(ctx.author)
+	dm_chan = await get_dm_channel(ctx.author)
 	if dm_chan != None:
 		await dm_chan.send(files=cache_files)
 	else:
@@ -647,7 +647,7 @@ async def sendLogs(ctx):
 		discord.File('RedditLog.log', 'RedditLog.txt'),
 		discord.File('DiscordLog.log', 'DiscordLog.txt'),
 	]
-	dm_chan = get_dm_channel(ctx.author)
+	dm_chan = await get_dm_channel(ctx.author)
 	if dm_chan != None:
 		await dm_chan.send(files=log_files)
 	else:
