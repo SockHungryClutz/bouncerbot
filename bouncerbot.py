@@ -459,7 +459,7 @@ async def modhelp(ctx):
 	reply       Reply to a recieved modmail DM
 	mute        Mute all modmail DMs from a user
 	unmute      Undo a mute
-	config      Set a config value for this bot
+	configure   Set a config value for this bot
 	```""")
 
 # secret command to send the current user lists
@@ -617,7 +617,7 @@ async def configure(ctx, *args):
 			reloadConfig()
 			await ctx.send("Config updated, "+args[0]+" = "+args[1])
 		else:
-			ctx.send("Not a valid config key, see https://github.com/SockHungryClutz/bouncerbot/blob/master/botconfig.ini")
+			await ctx.send("Not a valid config key, see https://github.com/SockHungryClutz/bouncerbot/blob/master/botconfig.ini")
 
 # super-secret command to DM the current cache and settings for the bot
 # THIS WILL SEND THE API KEY INFORMATION TOO, MAKE SURE YOUR USERNAME IS FIRST ON PING LIST
