@@ -265,7 +265,7 @@ async def on_message(message):
 					idx = len(userMap[2])
 					userMap[2].append(key)
 					FileParser.writeNestedList("usermap.txt", userMap, 'w')
-				mail = "From: "+auth+"\n(reply with `b.reply "+idx+" \"message here\"`, mute with `b.mute "+idx+"`)\n"+message.content
+				mail = "From: "+auth+"\n(reply with `b.reply "+str(idx)+" \"message here\"`, mute with `b.mute "+str(idx)+"`)\n"+message.content
 				await bot.get_channel(findChannel(config['general']['dm_channel'])).send(mail)
 			else:
 				await message.channel.send("You are currently muted, DM the mods directly to appeal your mute")
