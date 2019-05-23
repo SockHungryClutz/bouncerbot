@@ -25,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '2.-.-'
+VERSION = '2.0.0'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -40,6 +40,8 @@ logVerbosity = 4
 subreddit = ''
 MAX_COMMENT_KARMA = 0
 REQUIRED_KARMA_TOTAL = 10000
+# keys in here are int, else they're assumed to be str
+config_int_map = ['max_comment_karma', 'total_karma_required']
 def reloadConfig():
 	global config, token, queuePoll, logname, filesizemax, numlogsmax, logVerbosity, subreddit, MAX_COMMENT_KARMA, REQUIRED_KARMA_TOTAL
 	config.read('botconfig.ini')
@@ -251,7 +253,7 @@ async def on_message(message):
 	if not message.author.bot:
 		# isinstance is poor form, but what're you going to do?
 		if isinstance(message.channel, discord.DMChannel):
-			logger.info("Received message from " + message.author.name + " ; " + str(message.id))
+			logger.info("Received message from " + str(message.author.id) + " ; " + str(message.id))
 			if message.content[:4].lower() == "anon":
 				key = str(message.author.id) + "anon"
 				auth = "Anonymous User"
@@ -486,7 +488,7 @@ async def sendmessage(ctx, *args):
 	elif len(args) > 2:
 		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendmessage SimStart \"good bot\"`")
 	else:
-		logger.info("b.sendmessage called by: " + ctx.author.name + " ; " + args[0] + " ; " + args[1])
+		logger.info("b.sendmessage called by: " + str(ctx.author.id) + " ; " + args[0] + " ; " + args[1])
 		usr = ctx.guild.get_member_named(args[0])
 		if usr != None:
 			dm_chan = await get_dm_channel(usr)
@@ -516,10 +518,10 @@ async def reply(ctx, *args):
 	elif len(args) > 2:
 		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.reply 0 \"hello\"`")
 	else:
-		logger.info("b.reply called by " + ctx.author.name + " ; " + args[0])
+		logger.info("b.reply called by " + str(ctx.author.id) + " ; " + args[0])
 		try:
 			idx = int(args[0])
-		except BaseException as e:
+		except:
 			await ctx.send(args[0] + " is not a valid index! try again")
 			return
 		if len(userMap[2]) <= idx:
@@ -535,7 +537,7 @@ async def reply(ctx, *args):
 					await ctx.send("Message sent! :e_mail:")
 				else:
 					await ctx.send("Failed to open DM channel! Try again!")
-			except BaseException as e:
+			except:
 				await ctx.send("Could not send message, user not in server or is blocking me!")
 
 # mute DMs from a user
@@ -546,10 +548,10 @@ async def mute(ctx, *args):
 	if len(args) < 1:
 		await ctx.send("You need to specify an ID!\neg. `b.mute 0`")
 	else:
-		logger.info("b.mute called by " + ctx.author.name + " ; " + args[0])
+		logger.info("b.mute called by " + str(ctx.author.id) + " ; " + args[0])
 		try:
 			idx = int(args[0])
-		except BaseException as e:
+		except:
 			await ctx.send(args[0] + " is not a valid index! try again")
 			return
 		if len(userMap[2]) <= idx:
@@ -568,10 +570,10 @@ async def unmute(ctx, *args):
 	if len(args) < 1:
 		await ctx.send("You need to specify an ID!\neg. `b.unmute 0`")
 	else:
-		logger.info("b.unmute called by " + ctx.author.name + " ; " + args[0])
+		logger.info("b.unmute called by " + str(ctx.author.id) + " ; " + args[0])
 		try:
 			idx = int(args[0])
-		except BaseException as e:
+		except:
 			await ctx.send(args[0] + " is not a valid index! try again")
 			return
 		if len(userMap[2]) <= idx:
@@ -596,7 +598,7 @@ async def announce(ctx, *args):
 	elif len(args) > 1:
 		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendannouncement \"Don't Panic! this is just a test!\"`")
 	else:
-		logger.info("b.announce called by: " + ctx.author.name)
+		logger.info("b.announce called by: " + str(ctx.author.id))
 		await bot.get_channel(findChannel(config['general']['mod_announce_channel'])).send(content=args[0], embed=None)
 		await ctx.send("Announcement posted! :loudspeaker:")
 
@@ -610,8 +612,14 @@ async def configure(ctx, *args):
 	elif len(args) > 2:
 		await ctx.send("Too many arguments! You only need a key and value!\neg. `b.configure total_karma_required 15000`")
 	else:
-		logger.info("b.configure called by " + ctx.author.name + " ; " + args[0])
+		logger.info("b.configure called by " + str(ctx.author.id) + " ; " + args[0])
 		if args[0] in config['general'] and not args[0] == "subreddit":
+			if args[0] in config_int_map:
+				try:
+					int(args[1])
+				except:
+					await ctx.send(args[1]+" is not an integer as expected!")
+					return
 			config['general'][args[0]] = args[1]
 			configQueue.put([args[0], args[1]])
 			with open('botconfig.ini', 'w') as ini:
