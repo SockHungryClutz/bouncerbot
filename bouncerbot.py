@@ -25,35 +25,50 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '1.4.3'
+VERSION = '2.0.0'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
-# Read configuration
+# Read configuration, default global values
 config = configparser.ConfigParser()
-config.read('botconfig.ini')
-token = config['discord_creds']['token']
-queuePoll = int(config['general']['discord_queue_poll'])
-logname = config['logging']['discord_log_name']
-filesizemax = int(config['logging']['max_file_size'])
-numlogsmax = int(config['logging']['max_number_logs'])
-logVerbosity = int(config['logging']['log_verbosity'])
-subreddit = config['general']['subreddit']
-MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
-REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
+token = ''
+queuePoll = 60
+logname = ''
+filesizemax = 8000
+numlogsmax = 5
+logVerbosity = 4
+subreddit = ''
+MAX_COMMENT_KARMA = 0
+REQUIRED_KARMA_TOTAL = 10000
+# keys in here are int, else they're assumed to be str
+config_int_map = ['max_comment_karma', 'total_karma_required']
+def reloadConfig():
+	global config, token, queuePoll, logname, filesizemax, numlogsmax, logVerbosity, subreddit, MAX_COMMENT_KARMA, REQUIRED_KARMA_TOTAL
+	config.read('botconfig.ini')
+	token = config['discord_creds']['token']
+	queuePoll = int(config['timing']['discord_queue_poll'])
+	logname = config['logging']['discord_log_name']
+	filesizemax = int(config['logging']['max_file_size'])
+	numlogsmax = int(config['logging']['max_number_logs'])
+	logVerbosity = int(config['logging']['log_verbosity'])
+	subreddit = config['general']['subreddit']
+	MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
+	REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
+reloadConfig()
 realCleanShutDown = False
 p = None
 
 # Get the accepted users list
 aul = FileParser.parseFile("acceptedusers.txt", False)
 
-# Mapping of reddit usernames to discord id's
+# Mapping of reddit usernames to discord id's and DM channels
 userMap = FileParser.parseFile("usermap.txt", True)
 
 # Create the queues the processes will use to communicate
 newUserQueue = Queue()
 newPostQueue = Queue()
-queueList = [newUserQueue, newPostQueue]
+configQueue = Queue()
+queueList = [newUserQueue, newPostQueue, configQueue]
 # Extra stuff for the check file process
 filesAwaited = 0
 fileQueue = Queue()
@@ -171,7 +186,7 @@ async def check_post_queue():
 			logger.info("added post: "+newPost[1]+' ; '+newPost[2]+' ; '+newPost[3])
 			if newPost[1].lower() in userMap[0]:
 				uidx = userMap[0].index(newPost[1].lower())
-				duser = await bot.get_user_info(userMap[1][uidx])
+				duser = await bot.fetch_user(int(userMap[1][uidx]))
 				realuser = duser.mention + " (" + fixUsername(newPost[1]) + ")"
 			else:
 				realuser = fixUsername(newPost[1])
@@ -194,6 +209,7 @@ async def check_post_queue():
 				logger.error("Failed to send post message!\n" + str(e))
 		if closeDiscord:
 			# all other queues should be closed by the reddit side
+			configQueue.close()
 			logger.info("Discord process is shutting down now")
 			realCleanShutDown = True
 			p.join()
@@ -230,6 +246,36 @@ async def on_ready():
 	await bot.change_presence(activity=discord.Game(name='b.help for commands', type=1))
 	logger.info('Discord log in success!')
 
+# overwrite the on_message handler to accept DM's
+@bot.event
+async def on_message(message):
+	# ignore other bots I guess
+	if not message.author.bot:
+		# isinstance is poor form, but what're you going to do?
+		if isinstance(message.channel, discord.DMChannel):
+			logger.info("Received message from " + str(message.author.id) + " ; " + str(message.id))
+			if message.content[:4].lower() == "anon":
+				key = str(message.author.id) + "anon"
+				auth = "Anonymous User"
+				msg = message.content[4:]
+			else:
+				key = str(message.author.id)
+				auth = message.author.name
+				msg = message.content
+			if not (key in userMap[3]):
+				if key in userMap[2]:
+					idx = userMap[2].index(key)
+				else:
+					idx = len(userMap[2])
+					userMap[2].append(key)
+					FileParser.writeNestedList("usermap.txt", userMap, 'w')
+				mail = "From: "+auth+"\n(reply with `b.reply "+str(idx)+" \"message here\"`, mute with `b.mute "+str(idx)+"`)\n\n"+msg
+				await bot.get_channel(findChannel(config['general']['dm_channel'])).send(mail)
+			else:
+				await message.channel.send("You are currently muted, DM the mods directly to appeal your mute")
+		else:
+			await bot.process_commands(message)
+
 # check that's pretty useful
 async def is_admin(ctx):
 	if ctx.author.top_role.permissions.manage_channels:
@@ -256,58 +302,33 @@ async def get_dm_channel(auth):
 
 # Async function check a single reddit user, returns a code for success/failure
 async def check_user(username, ctx):
-	usrS = await SnoopSnooAPI.async_getUserJSON(username)
-	usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
+	ref = ""
+	usr = None
 	totalC = 0
 	totalS = 0
 	firlC = 0
 	firlK = 0
 	# some default value to prevent errors
-	updTime = ""
-	needRefresh = False
-	name = username
-	try:
-		errCode = usr['error']
-		if errCode == 404:
-			# there was an error, try refreshing the user
-			needRefresh = True
-	except KeyError as e:
-		# this means that all's good, do the rest of the stuff
-		pass
-	# Check the time of the last refresh
-	if not needRefresh:
-		updTime = usr['data']['metadata']['last_updated']
-		uT = datetime.strptime(updTime, "%a, %d %b %Y %X %Z")
-		nT = datetime.utcnow()
-		dT = (nT - uT).total_seconds()
-		if dT >= 14400:
-			needRefresh = True
-	if needRefresh:
+	if ctx != None:
+		logger.info("user needed refresh...")
+		await ctx.send("Give me a minute while I refresh " + fixUsername(username) + "'s profile...")
+	ref,usr = await SnoopSnooAPI.async_refreshSnoop(username)
+	if ref.find("EXCEPTION") == 0:
+		# some server side exception, tell user not to panic
 		if ctx != None:
-			logger.info("user needed refresh...")
-			await ctx.send("Give me a minute while I refresh " + fixUsername(username) + "'s profile...")
-		ref = await SnoopSnooAPI.async_refreshSnoop(username)
-		if ref == "OK":
-			# all is good, get the new user info
-			usrS = await SnoopSnooAPI.async_getUserJSON(username)
-			usr = SnoopSnooAPI.jsonStrToObj(usrS, False)
-		elif ref.find("EXCEPTION") == 0:
-			# some server side exception, tell user not to panic
-			if ctx != None:
-				logger.warning("snoopsnoo error: " + ref)
-			return -1,totalC,totalS,firlC,firlK,updTime
-		else:
-			# something went wrong, say something and return
-			if ctx != None:
-				logger.warning("refresh error: " + ref)
-			return -2,totalC,totalS,firlC,firlK,updTime
+			logger.warning("snoopsnoo error: " + ref)
+		return -1,totalC,totalS,firlC,firlK,updTime
+	elif ref.find("ERROR") == 0:
+		# something went wrong, say something and return
+		if ctx != None:
+			logger.warning("refresh error: " + ref)
+		return -2,totalC,totalS,firlC,firlK,updTime
 	try:
 		updTime = usr['data']['metadata']['last_updated']
 		name = usr['data']['username']
 		totalC = usr['data']['summary']['comments']['all_time_karma']
 		totalS = usr['data']['summary']['submissions']['all_time_karma']
-		# async doesn't matter when string is provided
-		firl = SnoopSnooAPI.getSubredditActivity(username, subreddit, usrS)
+		firl = SnoopSnooAPI.getSubredditActivity(username, subreddit, ref)
 		if firl != None:
 			firlC = firl["comment_karma"]
 			firlK = firl["submission_karma"]
@@ -426,6 +447,25 @@ async def remove(ctx, redditname: str=None):
 		FileParser.writeNestedList("usermap.txt", userMap, 'w')
 		await ctx.send("Removed "+str(num)+" instances of "+fixUsername(redditname)+" from the ping list :thumbsup:")
 
+# mod only command to show mod commands, viewable from b.help
+@bot.command()
+@commands.check(is_admin)
+async def modhelp(ctx):
+	"""Shows moderator commands (mods only)"""
+	logger.info("b.modhelp called")
+	await ctx.send("""```
+	Super-Special mod-only commands
+	(use "b.<command>" to give one of the following commands)
+	
+	sendlists   Send the lists of accepted and pingable users
+	sendmessage Send a DM on behalf of the moderators
+	announce    Make an announcement on behalf of the moderators
+	reply       Reply to a recieved modmail DM
+	mute        Mute all modmail DMs from a user
+	unmute      Undo a mute
+	configure   Set a config value for this bot
+	```""")
+
 # secret command to send the current user lists
 @bot.command(hidden=True)
 @commands.check(is_admin)
@@ -437,6 +477,157 @@ async def sendlists(ctx):
 		discord.File('usermap.txt', 'PingList.txt'),
 	]
 	await ctx.send(files=list_files)
+
+# admin command to message a user on behalf of the admins
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def sendmessage(ctx, *args):
+	"""Message a user on behalf of the mods (mods only)"""
+	if len(args) <= 1:
+		await ctx.send("You need to specify a discord user and message!\neg. `b.sendmessage SimStart \"good bot\"`")
+	elif len(args) > 2:
+		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendmessage SimStart \"good bot\"`")
+	else:
+		logger.info("b.sendmessage called by: " + str(ctx.author.id) + " ; " + args[0] + " ; " + args[1])
+		usr = ctx.guild.get_member_named(args[0])
+		if usr != None:
+			dm_chan = await get_dm_channel(usr)
+			if dm_chan != None:
+				success = True
+				try:
+					await dm_chan.send(args[1])
+				except BaseException as e:
+					success = False
+				if success:
+					await ctx.send("Message sent! :e_mail:")
+				else:
+					await ctx.send("Could not send message, user not in server or is blocking me!")
+			else:
+				await ctx.send("Failed to open DM channel! Try again!")
+				logger.warning("sendmessage failed: could not slide into DM's!")
+		else:
+			await ctx.send("Could not find the user, either use their display name or their discord identifier (username#1234)")
+
+# reply to a modmail DM
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def reply(ctx, *args):
+	"""Reply to a modmail DM (mods only)"""
+	if len(args) <= 1:
+		await ctx.send("You need to specify an ID and message!\neg. `b.reply 0 \"hello\"`")
+	elif len(args) > 2:
+		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.reply 0 \"hello\"`")
+	else:
+		logger.info("b.reply called by " + str(ctx.author.id) + " ; " + args[0])
+		try:
+			idx = int(args[0])
+		except:
+			await ctx.send(args[0] + " is not a valid index! try again")
+			return
+		if len(userMap[2]) <= idx:
+			await ctx.send(args[0] + " is not a valid index! try again")
+		else:
+			id = userMap[2][idx]
+			if id[-4:] == "anon":
+				id = id[:-4]
+			try:
+				dm_chan = await get_dm_channel(bot.get_user(int(id)))
+				if dm_chan != None:
+					await dm_chan.send(args[1])
+					await ctx.send("Message sent! :e_mail:")
+				else:
+					await ctx.send("Failed to open DM channel! Try again!")
+			except:
+				await ctx.send("Could not send message, user not in server or is blocking me!")
+
+# mute DMs from a user
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def mute(ctx, *args):
+	"""Mute all modmail DMs from a user (mods only)"""
+	if len(args) < 1:
+		await ctx.send("You need to specify an ID!\neg. `b.mute 0`")
+	else:
+		logger.info("b.mute called by " + str(ctx.author.id) + " ; " + args[0])
+		try:
+			idx = int(args[0])
+		except:
+			await ctx.send(args[0] + " is not a valid index! try again")
+			return
+		if len(userMap[2]) <= idx:
+			await ctx.send(args[0] + " is not a valid index! try again")
+		else:
+			id = userMap[2][idx]
+			userMap[3].append(id)
+			FileParser.writeNestedList("usermap.txt", userMap, 'w')
+			await ctx.send("Ignoring DMs from User ID " + str(idx) + ":thumbsup:")
+
+# unmute DMs from a user
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def unmute(ctx, *args):
+	"""Undo a mute (mods only)"""
+	if len(args) < 1:
+		await ctx.send("You need to specify an ID!\neg. `b.unmute 0`")
+	else:
+		logger.info("b.unmute called by " + str(ctx.author.id) + " ; " + args[0])
+		try:
+			idx = int(args[0])
+		except:
+			await ctx.send(args[0] + " is not a valid index! try again")
+			return
+		if len(userMap[2]) <= idx:
+			await ctx.send(args[0] + " is not a valid index! try again")
+		else:
+			id = userMap[2][idx]
+			if id in userMap[3]:
+				midx = userMap[3].index(id)
+				userMap[3].pop(midx)
+				FileParser.writeNestedList("usermap.txt", userMap, 'w')
+				await ctx.send("Unmuting DMs from User ID " + str(idx) + ":thumbsup:")
+			else:
+				await ctx.send("User ID " + str(idx) + " is not currently muted")
+
+# admin command to post an announcement
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def announce(ctx, *args):
+	"""Make an announcement (mods only)"""
+	if len(args) <= 0:
+		await ctx.send("You need to write a message!\neg. `b.sendannouncement \"Don't Panic! this is just a test!\"`")
+	elif len(args) > 1:
+		await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendannouncement \"Don't Panic! this is just a test!\"`")
+	else:
+		logger.info("b.announce called by: " + str(ctx.author.id))
+		await bot.get_channel(findChannel(config['general']['mod_announce_channel'])).send(content=args[0], embed=None)
+		await ctx.send("Announcement posted! :loudspeaker:")
+
+# set a configuration value from a command
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def configure(ctx, *args):
+	global config
+	if len(args) <= 1:
+		await ctx.send("You need to specify a key and value!\neg. `b.configure total_karma_required 15000`")
+	elif len(args) > 2:
+		await ctx.send("Too many arguments! You only need a key and value!\neg. `b.configure total_karma_required 15000`")
+	else:
+		logger.info("b.configure called by " + str(ctx.author.id) + " ; " + args[0])
+		if args[0] in config['general'] and not args[0] == "subreddit":
+			if args[0] in config_int_map:
+				try:
+					int(args[1])
+				except:
+					await ctx.send(args[1]+" is not an integer as expected!")
+					return
+			config['general'][args[0]] = args[1]
+			configQueue.put([args[0], args[1]])
+			with open('botconfig.ini', 'w') as ini:
+				config.write(ini)
+			reloadConfig()
+			await ctx.send("Config updated, "+args[0]+" = "+args[1])
+		else:
+			await ctx.send("Not a valid config key, see https://github.com/SockHungryClutz/bouncerbot/blob/master/botconfig.ini")
 
 # super-secret command to DM the current cache and settings for the bot
 # THIS WILL SEND THE API KEY INFORMATION TOO, MAKE SURE YOUR USERNAME IS FIRST ON PING LIST

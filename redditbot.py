@@ -22,16 +22,17 @@ class RedditBot():
 							user_agent=config['reddit_creds']['user_agent'])
 		self.sr = self.r.subreddit(config['general']['subreddit'])
 		
-		self.REDDIT_REFRESH_RATE = int(config['general']['reddit_new_refresh'])
-		self.TOP_REFRESH_RATE = int(config['general']['reddit_top_refresh'])
-		self.SNOOPSNOO_REFRESH_RATE = int(config['general']['snoop_snoo_refresh'])
-		self.EXIT_POLL_RATE = int(config['general']['reddit_exit_refresh'])
-		self.CYCLES_IN_REVIEW = config['general']['review_cycles']
+		self.REDDIT_REFRESH_RATE = int(config['timing']['reddit_new_refresh'])
+		self.TOP_REFRESH_RATE = int(config['timing']['reddit_top_refresh'])
+		self.SNOOPSNOO_REFRESH_RATE = int(config['timing']['snoop_snoo_refresh'])
+		self.EXIT_POLL_RATE = int(config['timing']['reddit_exit_refresh'])
+		self.CYCLES_IN_REVIEW = config['timing']['review_cycles']
 		self.MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
 		self.REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
 		
 		self.acceptQueue = queueList[0]
 		self.postQueue = queueList[1]
+		self.configQueue = queueList[2]
 		
 		# Start the logger
 		self.logger = RollingLogger_Async(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']), int(config['logging']['log_verbosity']))
@@ -50,15 +51,21 @@ class RedditBot():
 	
 	# Whether or not a user meets the requirements
 	def isQualified(self, subKarma, comKarma):
+		while not self.configQueue.empty():
+			c = self.configQueue.get()
+			if c[0] == "total_karma_required":
+				self.REQUIRED_KARMA_TOTAL = int(c[1])
+			elif c[0] == "max_comment_karma":
+				self.MAX_COMMENT_KARMA = int(c[1])
 		if comKarma > self.MAX_COMMENT_KARMA:
 			c = self.MAX_COMMENT_KARMA
 		else:
 			c = comKarma
 		return (subKarma + c >= self.REQUIRED_KARMA_TOTAL)
 	
-	# Async - Checks whether a user meets the requirements using snoopsnoo
-	async def async_isQualifiedSnoop(self, user):
-		jd = await SnoopSnooAPI.async_getSubredditActivity(user, self.sr.display_name)
+	# Checks whether a user meets the requirements using snoopsnoo
+	def isQualifiedUser(self, user, str):
+		jd = SnoopSnooAPI.getSubredditActivity(user, self.sr.display_name, str)
 		if jd != None:
 			skarma = jd["submission_karma"]
 			ckarma = jd["comment_karma"]
@@ -174,8 +181,8 @@ class RedditBot():
 			u = 0
 			while u < len(self.redditCache[1]):
 				usr = self.redditCache[1][u]
-				res = await SnoopSnooAPI.async_refreshSnoop(usr)
-				if res != "OK":
+				res,usrobj = await SnoopSnooAPI.async_refreshSnoop(usr)
+				if res.find("ERROR") == 0 or ref.find("EXCEPTION") == 0:
 					# See if the user exists, may be deleted or banned
 					ru = self.r.redditor(usr)
 					try:
@@ -187,7 +194,7 @@ class RedditBot():
 							self.redditCache[1].pop(u)
 							self.redditCache[2].pop(u)
 				else:
-					if await self.async_isQualifiedSnoop(usr):
+					if self.isQualifiedUser(usr, res):
 						wasChanged = True
 						self.logger.info("CONGRATULATIONS!! " + usr + " is qualified to join!")
 						# Add user to queue so discord side can announce it

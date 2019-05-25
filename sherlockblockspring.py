@@ -1,5 +1,8 @@
-# Library of SnoopSnoo functions to call into
-# Still update snoopnsoo because the overviews are fun
+# RIP SnoopSnoo
+# This calls directly to the blockspring behind it, likely throttled without api_key
+# not exactly a drop-in replacement for SnoopSnooAPI but it'll do
+# Also not using the premade blockspring python thing since it can't do async
+# Thanks to blockspring for keeping it accessible tho
 import requests
 import json
 import aiohttp
@@ -11,8 +14,8 @@ class UnStrictDecoder(json.JSONDecoder):
 		json.JSONDecoder.__init__(self, strict=False, *args, **kwargs)
 
 # Main API class
-class SnoopSnooAPI():
-	# Sync - Converts a response from a snoopsnoo API JSON string to a Python object
+class BlockSpringAPI():
+	# Sync - Converts a response from a snoopsnoo API JSON string to a Python object *****REQUIRED*****
 	@staticmethod
 	def jsonStrToObj(s, escapeQuotes=True):
 		if escapeQuotes:
@@ -58,9 +61,9 @@ class SnoopSnooAPI():
 		except:
 			return '{"_errors":[{"1":"aiohttp fail - post_json"}]}'
 	
-	# Async - This is the one that takes forever to respond
+	# Async - This is the one that takes forever to respond *****REQUIRED*****
 	@staticmethod
-	async def async_refreshSnoop(user):
+	async def async_refreshUser(user):
 		async with aiohttp.ClientSession() as ses:
 			res = await SnoopSnooAPI.async_post(ses, "https://sender.blockspring.com/api_v2/blocks/d03751d846a6a0ff9a6dfd36b9c1c641?api_key=", data={"username" : user, "json_data" : ""})
 			idx = res.find('"_errors":[{')
