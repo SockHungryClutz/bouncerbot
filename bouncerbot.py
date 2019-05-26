@@ -25,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '2.0.0'
+VERSION = '2.0.1'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -260,7 +260,7 @@ async def on_message(message):
 				msg = message.content[4:]
 			else:
 				key = str(message.author.id)
-				auth = message.author.name
+				auth = message.author.name+" ("+message.author.mention+")"
 				msg = message.content
 			if not (key in userMap[3]):
 				if key in userMap[2]:
@@ -454,16 +454,16 @@ async def modhelp(ctx):
 	"""Shows moderator commands (mods only)"""
 	logger.info("b.modhelp called")
 	await ctx.send("""```
-	Super-Special mod-only commands
-	(use "b.<command>" to give one of the following commands)
-	
-	sendlists   Send the lists of accepted and pingable users
-	sendmessage Send a DM on behalf of the moderators
-	announce    Make an announcement on behalf of the moderators
-	reply       Reply to a recieved modmail DM
-	mute        Mute all modmail DMs from a user
-	unmute      Undo a mute
-	configure   Set a config value for this bot
+Super-Special mod-only commands
+(use "b.<command>" to give one of the following commands)
+
+sendlists   Send the lists of accepted and pingable users
+sendmessage Send a DM on behalf of the moderators
+announce    Make an announcement on behalf of the moderators
+reply       Reply to a recieved modmail DM
+mute        Mute all modmail DMs from a user
+unmute      Undo a mute
+configure   Set a config value for this bot
 	```""")
 
 # secret command to send the current user lists
