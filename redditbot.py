@@ -182,7 +182,7 @@ class RedditBot():
 			while u < len(self.redditCache[1]):
 				usr = self.redditCache[1][u]
 				res,usrobj = await SnoopSnooAPI.async_refreshSnoop(usr)
-				if res.find("ERROR") == 0 or ref.find("EXCEPTION") == 0:
+				if res.find("ERROR") == 0 or res.find("EXCEPTION") == 0:
 					# See if the user exists, may be deleted or banned
 					ru = self.r.redditor(usr)
 					try:

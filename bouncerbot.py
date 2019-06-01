@@ -25,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '2.0.1'
+VERSION = '2.0.2'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -308,6 +308,7 @@ async def check_user(username, ctx):
 	totalS = 0
 	firlC = 0
 	firlK = 0
+	updTime = ""
 	# some default value to prevent errors
 	if ctx != None:
 		logger.info("user needed refresh...")
@@ -371,6 +372,8 @@ async def check(ctx, *args):
 				return await ctx.send("Error getting info on " + fixUsername(args[0]) + ", are you sure the user exists?")
 			else:
 				# Build the response embed
+				if updTime == ":
+					updTime = "Now"
 				embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
 				embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
 				embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)

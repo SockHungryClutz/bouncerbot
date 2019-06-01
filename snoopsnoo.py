@@ -15,10 +15,20 @@ class SnoopSnooAPI():
 	# Sync - Converts a response from a snoopsnoo API JSON string to a Python object
 	@staticmethod
 	def jsonStrToObj(s, escapeQuotes=True):
+		copy_s = s
 		if escapeQuotes:
 			s = s.replace('\\"','"')
 			s = s.replace('\\\\','\\')
-		return json.loads(s, cls=UnStrictDecoder)
+			try:
+				ret = json.loads(s, cls=UnStrictDecoder)
+			except:
+				# try removing more in case of formatting issues with comments
+				s = s.replace('\\\\','\\')
+				s = s.replace('\\"','"')
+				ret = json.loads(s, cls=UnStrictDecoder)
+		else:
+			ret = json.loads(s, cls=UnStrictDecoder)
+		return ret
 	
 	# Sync - Get a python object representing a user's activity in a subreddit
 	@staticmethod
@@ -70,6 +80,14 @@ class SnoopSnooAPI():
 			upd = res[idx+11:-2]
 			try:
 				jd = SnoopSnooAPI.jsonStrToObj(upd)
+			except Exception as e:
+				return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + res, None
+			ret = await SnoopSnooAPI.async_post_json(ses, "https://snoopsnoo.com/update", json=jd)
+			if ret != "OK":
+				return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + ret, None
+			res = await SnoopSnooAPI.async_get(ses, "https://snoopsnoo.com/api/u/" + user)
+			try:
+				jd = SnoopSnooAPI.jsonStrToObj(res)
 			except Exception as e:
 				return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + res, None
 			return res, jd
