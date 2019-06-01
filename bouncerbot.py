@@ -372,7 +372,7 @@ async def check(ctx, *args):
 				return await ctx.send("Error getting info on " + fixUsername(args[0]) + ", are you sure the user exists?")
 			else:
 				# Build the response embed
-				if updTime == ":
+				if updTime == "":
 					updTime = "Now"
 				embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
 				embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
