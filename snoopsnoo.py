@@ -17,15 +17,19 @@ class SnoopSnooAPI():
 	def jsonStrToObj(s, escapeQuotes=True):
 		copy_s = s
 		if escapeQuotes:
-			s = s.replace('\\"','"')
-			s = s.replace('\\\\','\\')
+			# try without, just cuz
 			try:
 				ret = json.loads(s, cls=UnStrictDecoder)
 			except:
-				# try removing more in case of formatting issues with comments
-				s = s.replace('\\\\','\\')
 				s = s.replace('\\"','"')
-				ret = json.loads(s, cls=UnStrictDecoder)
+				s = s.replace('\\\\','\\')
+				try:
+					ret = json.loads(s, cls=UnStrictDecoder)
+				except:
+					# try removing more in case of formatting issues with comments
+					s = s.replace('\\\\','\\')
+					s = s.replace('\\"','"')
+					ret = json.loads(s, cls=UnStrictDecoder)
 		else:
 			ret = json.loads(s, cls=UnStrictDecoder)
 		return ret

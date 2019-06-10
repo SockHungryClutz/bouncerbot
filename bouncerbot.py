@@ -25,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '2.0.2'
+VERSION = '2.0.3'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -400,7 +400,7 @@ async def ignore(ctx, *args):
 async def ping(ctx):
 	"""Set up username pings for #top-posts-of-day"""
 	if ctx.invoked_subcommand is None:
-		await ctx.send("Invalid command! use `b.ping user <@discord> <redditname>` or `b.ping me <redditname>`")
+		await ctx.send("Invalid command! use `b.ping user <@discord> <redditname>` or `b.ping member <discordname> <redditname>` or `b.ping me <redditname>`")
 
 @ping.command()
 @commands.check(is_admin)
@@ -413,6 +413,23 @@ async def user(ctx, member: discord.Member=None, redditname: str=None):
 		if not redditname.lower() in acceptedusers:
 			await ctx.send("Couldn't find '"+redditname+"' in accepted users, are you sure their name is spelled correctly?")
 		else:
+			userMap[0].append(redditname.lower())
+			userMap[1].append(str(member.id))
+			FileParser.writeNestedList("usermap.txt", userMap, 'w')
+			await ctx.send("Added "+fixUsername(redditname)+" to the ping list :thumbsup:")
+
+@ping.command()
+@commands.check(is_admin)
+async def member(ctx, discordname: str=None, redditname: str=None):
+	"""Associate a discord user to a reddit username (mods only)"""
+	if discordname is None or redditname is None:
+		await ctx.send("You need to specify both a Discord user and a reddit username,\neg. `b.ping user SimStart SimStart`")
+	else:
+		logger.info("b.ping member called: " ; "+redditname)
+		if not redditname.lower() in acceptedusers:
+			await ctx.send("Couldn't find '"+redditname+"' in accepted users, are you sure their name is spelled correctly?")
+		else:
+			member = ctx.guild.get_member_named(discordname)
 			userMap[0].append(redditname.lower())
 			userMap[1].append(str(member.id))
 			FileParser.writeNestedList("usermap.txt", userMap, 'w')
