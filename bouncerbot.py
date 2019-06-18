@@ -251,6 +251,7 @@ async def on_ready():
 # overwrite the on_message handler to accept DM's
 @bot.event
 async def on_message(message):
+	global lastMessageFrom
 	# ignore other bots I guess
 	if not message.author.bot:
 		# isinstance is poor form, but what're you going to do?
@@ -275,7 +276,7 @@ async def on_message(message):
 					idx = len(userMap[2])
 					userMap[2].append(key)
 					FileParser.writeNestedList("usermap.txt", userMap, 'w')
-				if key == lastMessageFrom:
+				if key != lastMessageFrom:
 					mail = "From: "+auth+"\n(reply with `b.reply "+str(idx)+" \"message here\"`, mute with `b.mute "+str(idx)+"`)\n\n"+msg
 				else:
 					mail = msg
@@ -513,8 +514,14 @@ async def sendmessage(ctx, *args):
 			dm_chan = await get_dm_channel(usr)
 			if dm_chan != None:
 				success = True
+				msg = args[1]
 				try:
-					await dm_chan.send(args[1])
+					for item in ctx.message.attachments:
+						msg += "\n" + item.url
+				except:
+					logger.warning("Could not get URL for all attachments")
+				try:
+					await dm_chan.send(msg)
 				except BaseException as e:
 					success = False
 				if success:
@@ -552,7 +559,13 @@ async def reply(ctx, *args):
 			try:
 				dm_chan = await get_dm_channel(bot.get_user(int(id)))
 				if dm_chan != None:
-					await dm_chan.send(args[1])
+					msg = args[1]
+					try:
+						for item in ctx.message.attachments:
+							msg += "\n" + item.url
+					except:
+						logger.warning("Could not get URL for all attachments")
+					await dm_chan.send(msg)
 					await ctx.send("Message sent! :e_mail:")
 				else:
 					await ctx.send("Failed to open DM channel! Try again!")
