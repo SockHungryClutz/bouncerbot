@@ -25,7 +25,7 @@ from snoopsnoo import SnoopSnooAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '2.0.3a'
+VERSION = '2.1.0'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -55,6 +55,8 @@ def reloadConfig():
 	MAX_COMMENT_KARMA = int(config['general']['max_comment_karma'])
 	REQUIRED_KARMA_TOTAL = int(config['general']['total_karma_required'])
 reloadConfig()
+
+lastMessageFrom = ""
 realCleanShutDown = False
 p = None
 
@@ -253,12 +255,16 @@ async def on_message(message):
 	if not message.author.bot:
 		# isinstance is poor form, but what're you going to do?
 		if isinstance(message.channel, discord.DMChannel):
-			logger.info("Received message from " + str(message.author.id) + " ; " + str(message.id))
 			if message.content[:4].lower() == "anon":
+				# Keep users anonymous
+				logger.info("Received message from Anonymous User ; " + str(message.id))
+				# Can't do much here since the bot needs their discord ID to persist between restarts
+				# and any obfuscation could eventually be cracked
 				key = str(message.author.id) + "anon"
 				auth = "Anonymous User"
 				msg = message.content[4:]
 			else:
+				logger.info("Received message from " + str(message.author.id) + " ; " + str(message.id))
 				key = str(message.author.id)
 				auth = message.author.name+" ("+message.author.mention+")"
 				msg = message.content
@@ -269,7 +275,17 @@ async def on_message(message):
 					idx = len(userMap[2])
 					userMap[2].append(key)
 					FileParser.writeNestedList("usermap.txt", userMap, 'w')
-				mail = "From: "+auth+"\n(reply with `b.reply "+str(idx)+" \"message here\"`, mute with `b.mute "+str(idx)+"`)\n\n"+msg
+				if key == lastMessageFrom:
+					mail = "From: "+auth+"\n(reply with `b.reply "+str(idx)+" \"message here\"`, mute with `b.mute "+str(idx)+"`)\n\n"+msg
+				else:
+					mail = msg
+				lastMessageFrom = key
+				# Get attachments, put in the URLs, don't save anything unknown to the bot
+				try:
+					for item in message.attachments:
+						mail += "\n" + item.url
+				except:
+					logger.warning("Could not get URL for all attachments")
 				await bot.get_channel(findChannel(config['general']['dm_channel'])).send(mail)
 			else:
 				await message.channel.send("You are currently muted, DM the mods directly to appeal your mute")
