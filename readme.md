@@ -47,3 +47,11 @@ The bot will print a startup message, and all future messages will be logged as 
 * To clear the reddit cache (only works between runs), edit `redditcache.txt` to have 5 blank lines, and put `0` on the first line  
 * Clearing the usermap can be done similarly, edit `usermap.txt` to have 3 blank lines
 * For all other support questions and concerns, please don't bother me
+
+-----
+
+## About User Privacy
+
+I created the anonymous modmail feature with the intentions that users can step forward with information that they would not be comfortable disclosing when the information is attached to their username. However, there is potential for abuse on both ends of the message; users can spread misinformation and spam to mods, and the mods can ask the owner (me) to unmask who certain anonymous users are, violating the trust provided by anonymous modmail. Moderators must exercise caution, and be skeptical of whatever anonymous mail comes in. As the saying goes, "trust, but verify." In the same vein, moderators must trust in the anonymous modmail, and understand that unmasking anonymous users leads to distrust in the system, and negates the purpose of anonymous modmail. That being said, unmasking users is only possible by the owner (me). Why is it possible at all? Bouncerbot must be able to decipher the Discord ID's of users that send anonymous modmail to ensure continuity between conversations and that replies are sent to the proper user. As such, the user IDs are stored on disk, and if they were obfuscated, then it must always be possible to unobfuscate, this is essential to how Bouncerbot operates.
+
+As for my view on unmasking users: it is not an option to be taken lightly. I firmly believe that unmasking users creates more problems than it could ever solve. The system of trust built around having anonymous modmail would be entirely ruined after the first unmasking, leading to the nullification of its purpose, and sowing immense distrust in the mods. This is the last thing that I want to happen. I believe that there will always be better ways to solve issues with anonymous users, and nothing is worth the dire consequence of unmasking any user. It is with this philosophy that I will petition against any movement to unmask anonymous users in mod mail, if only to be devil's advocate and make all stop and consider the ramifications of doing so.
