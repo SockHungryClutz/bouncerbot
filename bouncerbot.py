@@ -277,9 +277,9 @@ async def on_message(message):
                     userMap[2].append(key)
                     FileParser.writeNestedList("usermap.txt", userMap, 'w')
                 # skip header if this bot posted the last message and this message is from the same author
-                lastmsg = await bot.fetch_message(bot.get_channel(findChannel(config['general']['dm_channel'])).last_message_id)
-                # can't get this bot's own id, just check if it's a bot
-                skipheader = (key == lastMessageFrom) and (lastmsg.author.bot)
+                mailchannel = bot.get_channel(findChannel(config['general']['dm_channel']))
+                lastmsg = await mailchannel.fetch_message(mailchannel.last_message_id)
+                skipheader = (key == lastMessageFrom) and (lastmsg.author.id == bot.user.id)
                 if skipheader:
                     mail = msg
                 else:
@@ -291,7 +291,7 @@ async def on_message(message):
                         mail += "\n" + item.url
                 except:
                     logger.warning("Could not get URL for all attachments")
-                await bot.get_channel(findChannel(config['general']['dm_channel'])).send(mail)
+                await mailchannel.send(mail)
             else:
                 await message.channel.send("You are currently muted, DM the mods directly to appeal your mute")
         else:
