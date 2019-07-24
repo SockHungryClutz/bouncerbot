@@ -2,7 +2,7 @@
 import praw
 import time
 import asyncio
-from snoopsnoo import SnoopSnooAPI
+from sheriapi import SheriAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
@@ -65,7 +65,7 @@ class RedditBot():
     
     # Checks whether a user meets the requirements using snoopsnoo
     def isQualifiedUser(self, user, str):
-        jd = SnoopSnooAPI.getSubredditActivity(user, self.sr.display_name, str)
+        jd = SheriAPI.getSubredditActivity(user, self.sr.display_name, str)
         if jd != None:
             skarma = jd["submission_karma"]
             ckarma = jd["comment_karma"]
@@ -181,7 +181,7 @@ class RedditBot():
             u = 0
             while u < len(self.redditCache[1]):
                 usr = self.redditCache[1][u]
-                res,usrobj = await SnoopSnooAPI.async_refreshSnoop(usr)
+                res,usrobj = await SheriAPI.async_getUserInfo(usr)
                 if res.find("ERROR") == 0 or res.find("EXCEPTION") == 0:
                     # See if the user exists, may be deleted or banned
                     ru = self.r.redditor(usr)
