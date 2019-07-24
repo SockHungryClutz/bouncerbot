@@ -21,11 +21,11 @@ import time
 from datetime import datetime
 from multiprocessing import Process, Queue, Manager
 import redditbot
-from snoopsnoo import SnoopSnooAPI
+from sheriapi import SheriAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '2.1.1'
+VERSION = '2.2.0'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -334,7 +334,7 @@ async def check_user(username, ctx):
     if ctx != None:
         logger.info("user needed refresh...")
         await ctx.send("Give me a minute while I refresh " + fixUsername(username) + "'s profile...")
-    ref,usr = await SnoopSnooAPI.async_refreshSnoop(username)
+    ref,usr = await SheriAPI.async_getUserInfo(username)
     if ref.find("EXCEPTION") == 0:
         # some server side exception, tell user not to panic
         if ctx != None:
@@ -346,11 +346,10 @@ async def check_user(username, ctx):
             logger.warning("refresh error: " + ref)
         return -2,totalC,totalS,firlC,firlK,updTime
     try:
-        updTime = usr['data']['metadata']['last_updated']
-        name = usr['data']['username']
-        totalC = usr['data']['summary']['comments']['all_time_karma']
-        totalS = usr['data']['summary']['submissions']['all_time_karma']
-        firl = SnoopSnooAPI.getSubredditActivity(username, subreddit, ref)
+        name = usr['username']
+        totalC = usr['summary']['comments']['all_time_karma']
+        totalS = usr['summary']['submissions']['all_time_karma']
+        firl = SheriAPI.getSubredditActivity(username, subreddit, ref)
         if firl != None:
             firlC = firl["comment_karma"]
             firlK = firl["submission_karma"]
@@ -399,7 +398,7 @@ async def check(ctx, *args):
                 # Build the response embed
                 if updTime == "":
                     updTime = "Now"
-                embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
+                embd = discord.Embed(title="Overview for " + fixUsername(name), description="description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
                 embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
                 embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)
                 embd.add_field(name="Last Refreshed: ", value=updTime, inline=True)
@@ -409,6 +408,25 @@ async def check(ctx, *args):
                 if(isQualified(firlK, firlC) and not (name.lower() in acceptedusers)):
                     acceptedusers.append(name.lower())
                     newUserQueue.put(name)
+
+@bot.command()
+async def refresh(ctx, *args):
+    """Manually refresh a user profile on SnoopSnoo"""
+    if len(args) <= 0:
+        await ctx.send("You need to specify a reddit user!\neg. `b.refresh SimStart`")
+    else:
+        logger.info("b.refresh called: "+args[0])
+        ref,usr = await SheriAPI.async_refreshSnoop(username)
+        if ref.find("EXCEPTION") == 0:
+            # some server side exception, tell user not to panic
+            logger.warning("snoopsnoo error: " + ref)
+            return await ctx.send("Oopsie Woopsie! SnoopSnoo made a little fucky wucky!\n(try again in a minute)")
+        elif ref.find("ERROR") == 0:
+            # something went wrong, say something and return
+            logger.warning("refresh error: " + ref)
+            return await ctx.send("Error getting info on " + fixUsername(args[0]) + ", are you sure the user exists?")
+        else:
+            return await ctx.send("Updated SnoopSnoo Profile now available!\nhttps://snoopsnoo.com/u/" + args[0])
 
 @bot.command()
 @commands.check(is_admin)

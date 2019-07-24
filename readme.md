@@ -7,7 +7,7 @@ Helper bot for the Furry Shitposting Guild
 ## Requirements
 
 * [Python](https://www.python.org/downloads/release/python-366/) 3.4-3.6 (3.7+ **MIGHT** work)  
-* Use [pip](https://pypi.org/project/pip/) to install the following:  
+* Use [pip](https://pypi.org/project/pip/) to install the following: (or use `pip install -r requirements.txt`)
   * [requests](https://pypi.org/project/requests/)  
   * [discord.py](https://pypi.org/project/discord.py/) (V 1.1 or greater)  
   * [praw](https://pypi.org/project/praw/) (V6.1.0 or greater for spoiler support!)  
