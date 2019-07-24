@@ -398,7 +398,7 @@ async def check(ctx, *args):
                 # Build the response embed
                 if updTime == "":
                     updTime = "Now"
-                embd = discord.Embed(title="Overview for " + fixUsername(name), description="description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
+                embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
                 embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
                 embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)
                 embd.add_field(name="Last Refreshed: ", value=updTime, inline=True)

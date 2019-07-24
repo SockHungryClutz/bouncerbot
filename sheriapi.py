@@ -42,7 +42,7 @@ class SheriAPI():
         if(idx != -1):
             begin = snoop.rfind('{',0,idx)
             end = snoop.find('}',idx)
-            return SnoopSnooAPI.jsonStrToObj(snoop[begin:end+1])
+            return SheriAPI.jsonStrToObj(snoop[begin:end+1])
         return None
     
     # Async - http get, but async
@@ -76,12 +76,12 @@ class SheriAPI():
     @staticmethod
     async def async_getUserInfo(user):
         async with aiohttp.ClientSession() as ses:
-            res = await SnoopSnooAPI.async_get(ses, "http://sheri.azurewebsites.net/query", data={"username" : user})
+            res = await SheriAPI.async_get(ses, "http://sheri.azurewebsites.net/query", data={"username" : user})
             idx = res.find('"_errors":[{')
             if idx != -1:
                 return ("ERROR getting user: " + user), None
             try:
-                jd = SnoopSnooAPI.jsonStrToObj(res)
+                jd = SheriAPI.jsonStrToObj(res)
             except Exception as e:
                 return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + res, None
             return res, jd
@@ -90,22 +90,22 @@ class SheriAPI():
     @staticmethod
     async def async_refreshSnoop(user):
         async with aiohttp.ClientSession() as ses:
-            res = await SnoopSnooAPI.async_get(ses, "http://sheri.azurewebsites.net/fullquery", data={"username" : user})
+            res = await SheriAPI.async_get(ses, "http://sheri.azurewebsites.net/fullquery", data={"username" : user})
             idx = res.find('"_errors":[{')
             if idx != -1:
                 return ("ERROR getting user: " + user), None
             idx = res.find('"results":')
             upd = res[idx+11:-2]
             try:
-                jd = SnoopSnooAPI.jsonStrToObj(upd)
+                jd = SheriAPI.jsonStrToObj(upd)
             except Exception as e:
                 return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + res, None
-            ret = await SnoopSnooAPI.async_post_json(ses, "https://snoopsnoo.com/update", json=jd)
+            ret = await SheriAPI.async_post_json(ses, "https://snoopsnoo.com/update", json=jd)
             if ret != "OK":
                 return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + ret, None
-            res = await SnoopSnooAPI.async_get(ses, "https://snoopsnoo.com/api/u/" + user)
+            res = await SheriAPI.async_get(ses, "https://snoopsnoo.com/api/u/" + user)
             try:
-                jd = SnoopSnooAPI.jsonStrToObj(res)
+                jd = SheriAPI.jsonStrToObj(res)
             except Exception as e:
                 return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + res, None
             return res, jd
