@@ -76,7 +76,7 @@ class SheriAPI():
     @staticmethod
     async def async_getUserInfo(user):
         async with aiohttp.ClientSession() as ses:
-            res = await SheriAPI.async_get(ses, "http://sheri.azurewebsites.net/query", data={"username" : user})
+            res = await SheriAPI.async_get(ses, "http://sheri.azurewebsites.net/query?username=" + user)
             idx = res.find('"_errors":[{')
             if idx != -1:
                 return ("ERROR getting user: " + user), None
@@ -90,14 +90,12 @@ class SheriAPI():
     @staticmethod
     async def async_refreshSnoop(user):
         async with aiohttp.ClientSession() as ses:
-            res = await SheriAPI.async_get(ses, "http://sheri.azurewebsites.net/fullquery", data={"username" : user})
+            res = await SheriAPI.async_get(ses, "http://sheri.azurewebsites.net/fullquery?username=" + user)
             idx = res.find('"_errors":[{')
             if idx != -1:
                 return ("ERROR getting user: " + user), None
-            idx = res.find('"results":')
-            upd = res[idx+11:-2]
             try:
-                jd = SheriAPI.jsonStrToObj(upd)
+                jd = SheriAPI.jsonStrToObj(res)
             except Exception as e:
                 return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + res, None
             ret = await SheriAPI.async_post_json(ses, "https://snoopsnoo.com/update", json=jd)

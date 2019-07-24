@@ -391,14 +391,14 @@ async def check(ctx, *args):
             logger.info("check called: " + args[0])
             result,totalC,totalS,firlC,firlK,updTime = await check_user(args[0], ctx)
             if result == -1:
-                return await ctx.send("Oopsie Woopsie! SnoopSnoo made a little fucky wucky!\n(try again in a minute)")
+                return await ctx.send("Oopsie Woopsie! Sheri must have messed up!\n(try again in a minute)")
             elif result == -2:
                 return await ctx.send("Error getting info on " + fixUsername(args[0]) + ", are you sure the user exists?")
             else:
                 # Build the response embed
                 if updTime == "":
                     updTime = "Now"
-                embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://snoopsnoo.com/u/" + name + "\n https://www.reddit.com/u/" + name, color=0xa78c2c)
+                embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://www.reddit.com/u/" + name + "\nhttps://snoopsnoo.com/u/" + name, color=0xa78c2c)
                 embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
                 embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)
                 embd.add_field(name="Last Refreshed: ", value=updTime, inline=True)
@@ -416,7 +416,8 @@ async def refresh(ctx, *args):
         await ctx.send("You need to specify a reddit user!\neg. `b.refresh SimStart`")
     else:
         logger.info("b.refresh called: "+args[0])
-        ref,usr = await SheriAPI.async_refreshSnoop(username)
+        await ctx.send("Give me a minute while I refresh" + args[0] + "'s profile...")
+        ref,usr = await SheriAPI.async_refreshSnoop(args[0])
         if ref.find("EXCEPTION") == 0:
             # some server side exception, tell user not to panic
             logger.warning("snoopsnoo error: " + ref)
