@@ -310,7 +310,8 @@ async def is_admin(ctx):
 
 # check that's very restrictive, only for the owner of the app
 async def is_owner(ctx):
-    if ctx.author.id == bot.AppInfo.owner.id:
+    appinfo = await ctx.bot.application_info()
+    if ctx.author.id == appinfo.owner.id:
         return True
     else:
         await ctx.send("This super-secret command only works for my owner!")
@@ -508,30 +509,77 @@ async def cleanup(ctx):
         if guild.large:
             await bot.request_offline_members(guild.id)
         for member in guild.members:
-            activeIdList.append(member.id)
+            if member.id != bot.user.id:
+                activeIdList.append(member.id)
     # if user in pinglist isn't a member, remove them
     removedPings = []
     itr = len(userMap[1]) - 1
     while itr >= 0:
-        if userMap[1][itr] not in activeIdList:
+        if int(userMap[1][itr]) not in activeIdList:
             removedPings.append(userMap[0][itr])
             userMap[0].pop(itr)
             userMap[1].pop(itr)
+            FileParser.writeNestedList("usermap.txt", userMap, 'w')
         itr -= 1
     # if member isn't in ping list, notify mods
     notifyList = []
     itr = len(activeIdList) - 1
     while itr >= 0:
-        if activeIdList[itr] not in userMap[0]:
+        if str(activeIdList[itr]) not in userMap[1]:
             newUser = await bot.fetch_user(activeIdList[itr])
             notifyList.append(newUser.name)
+        itr -= 1
+    # call out any duplicates
+    duperedd = []
+    dupedisc = []
+    seenr = []
+    seend = []
+    itr = len(userMap[0]) - 1
+    while itr >= 0:
+        if (userMap[0] in seenr) and (userMap[0] not in duperedd):
+            duperedd.append(userMap[0])
+        else:
+            seenr.append(userMap[0])
+        if (userMap[1] in seend) and (userMap[1] not in dupedisc):
+            dupedisc.append(userMap[1])
+        else:
+            seend.append(userMap[1])
+        itr -= 1
     # send results
-    result = "Removed the following reddit users who aren't members:\n"
-    for rmember in removedPings:
-        result += rmember + ", "
-    result += "\n\nUsers who need ping setup:\n"
-    for nmember in notifyList:
-        result += nmember + ", "
+    if len(removedPings) > 0:
+        result = "Removed the following reddit users who aren't members:\n"
+        for rmember in removedPings:
+            result += rmember + ", "
+    else:
+        result = "No erraneous ping entries found"
+    if len(notifyList) > 0:
+        result += "\n\nUsers who need ping setup:\n"
+        for nmember in notifyList:
+            result += nmember + ", "
+    else:
+        result += "\n\nNo users need ping setup"
+    if len(duperedd) > 0:
+        result += "\n\nReddit usernames that map to multiple discord users: (fix by using `b.ping remove` then readding only the correct ping)"
+        for rname in duperedd:
+            tempidx = 0
+            result += "\n" + rname + " - Maps to: "
+            while rname in userMap[0][tempidx:]:
+                usr = await bot.fetch_user(userMap[1][userMap[0][tempidx:].index(rname)+tempidx])
+                result += usr.name + ', '
+                tempidx = userMap[0][tempidx:].index(rname)+tempidx+1
+    else:
+        result += "\n\nNo duplicate reddit user entries"
+    if len(dupedisc) > 0:
+        result += "\n\nDiscord users with multiple reddit users: (fix by using `b.ping remove` on incorrect reddit users)"
+        for discid in dupedisc:
+            tempidx = 0
+            usr = await bot.fetch_user(int(discid))
+            result += "\n" + usr.name + " - Maps to: "
+            while discid in userMap[1][tempidx:]:
+                result += userMap[0][userMap[1][tempidx:].index(discid)+tempidx] + ', '
+                tempidx = userMap[1][tempidx:].index(discid)+tempidx+1
+    else:
+        result += "\n\nNo duplicate Discord ID entries"
     await ctx.send(result)
 
 # mod only command to show mod commands, viewable from b.help
@@ -729,7 +777,7 @@ async def configure(ctx, *args):
             await ctx.send("Not a valid config key, see https://github.com/SockHungryClutz/bouncerbot/blob/master/botconfig.ini")
 
 # super-secret command to DM the current cache and settings for the bot
-# THIS WILL SEND THE API KEY INFORMATION TOO, MAKE SURE YOUR USERNAME IS FIRST ON PING LIST
+# THIS WILL SEND THE API KEY INFORMATION TOO, SO IT IS ONLY FOR THE OWNER
 @bot.command(hidden=True)
 @commands.check(is_owner)
 async def sendCache(ctx):
