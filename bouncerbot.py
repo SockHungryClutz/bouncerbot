@@ -536,14 +536,14 @@ async def cleanup(ctx):
     seend = []
     itr = len(userMap[0]) - 1
     while itr >= 0:
-        if (userMap[0] in seenr) and (userMap[0] not in duperedd):
-            duperedd.append(userMap[0])
+        if (userMap[0][itr] in seenr) and (userMap[0][itr] not in duperedd):
+            duperedd.append(userMap[0][itr])
         else:
-            seenr.append(userMap[0])
-        if (userMap[1] in seend) and (userMap[1] not in dupedisc):
-            dupedisc.append(userMap[1])
+            seenr.append(userMap[0][itr])
+        if (userMap[1][itr] in seend) and (userMap[1][itr] not in dupedisc):
+            dupedisc.append(userMap[1][itr])
         else:
-            seend.append(userMap[1])
+            seend.append(userMap[1][itr])
         itr -= 1
     # send results
     if len(removedPings) > 0:
