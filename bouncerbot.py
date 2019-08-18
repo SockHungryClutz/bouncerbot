@@ -503,6 +503,7 @@ async def remove(ctx, redditname: str=None):
 async def cleanup(ctx):
     """Cleanup unused pings and print new users (mods only)"""
     logger.info("b.ping cleanup called")
+    FileParser.writeNestedList("usermap_backup.txt", userMap, 'w')
     guilds = await bot.fetch_guilds().flatten()
     activeIdList = []
     for guild in guilds:
@@ -517,9 +518,6 @@ async def cleanup(ctx):
     while itr >= 0:
         if int(userMap[1][itr]) not in activeIdList:
             removedPings.append(userMap[0][itr])
-            userMap[0].pop(itr)
-            userMap[1].pop(itr)
-            FileParser.writeNestedList("usermap.txt", userMap, 'w')
         itr -= 1
     # if member isn't in ping list, notify mods
     notifyList = []
@@ -547,7 +545,7 @@ async def cleanup(ctx):
         itr -= 1
     # send results
     if len(removedPings) > 0:
-        result = "Removed the following reddit users who aren't members:\n"
+        result = "Registered reddit users who aren't members: (use `b.ping remove` to remove)\n"
         for rmember in removedPings:
             result += rmember + ", "
     else:
