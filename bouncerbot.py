@@ -25,7 +25,7 @@ from sheriapi import SheriAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '2.2.1'
+VERSION = '2.2.1a'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -290,6 +290,7 @@ async def on_message(message):
                         mail += "\n" + item.url
                 except:
                     logger.warning("Could not get URL for all attachments")
+                mailchannel = bot.get_channel(findChannel(config['general']['dm_channel']))
                 messageComboBreak = False
                 await mailchannel.send(mail)
             else:
@@ -593,7 +594,7 @@ Super-Special mod-only commands
 sendlists   Send the lists of accepted and pingable users
 sendmessage Send a DM on behalf of the moderators
 announce    Make an announcement on behalf of the moderators
-reply       Reply to a recieved modmail DM
+reply       Reply to a received modmail DM
 mute        Mute all modmail DMs from a user
 unmute      Undo a mute
 configure   Set a config value for this bot
