@@ -76,7 +76,7 @@ class SheriAPI():
     @staticmethod
     async def async_getUserInfo(user):
         async with aiohttp.ClientSession() as ses:
-            res = await SheriAPI.async_get(ses, "http://sheri.azurewebsites.net/query?username=" + user)
+            res = await SheriAPI.async_get(ses, "http://sherley.azurewebsites.net/api/Query?username=" + user)
             idx = res.find('"_errors":[{')
             if idx != -1:
                 return ("ERROR getting user: " + user), None
@@ -90,7 +90,7 @@ class SheriAPI():
     @staticmethod
     async def async_refreshSnoop(user):
         async with aiohttp.ClientSession() as ses:
-            res = await SheriAPI.async_get(ses, "http://sheri.azurewebsites.net/fullquery?username=" + user)
+            res = await SheriAPI.async_get(ses, "http://sherley.azurewebsites.net/api/FullQuery?username=" + user)
             idx = res.find('"_errors":[{')
             if idx != -1:
                 return ("ERROR getting user: " + user), None

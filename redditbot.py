@@ -35,7 +35,7 @@ class RedditBot():
         self.configQueue = queueList[2]
         
         # Start the logger
-        self.logger = RollingLogger_Async(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']), int(config['logging']['log_verbosity']))
+        self.logger = RollingLogger_Sync(config['logging']['reddit_log_name'], int(config['logging']['max_file_size']), int(config['logging']['max_number_logs']), int(config['logging']['log_verbosity']))
         
         self.gracefulExit = False
         

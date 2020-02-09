@@ -4,8 +4,6 @@ Many months of weird optimizations led this to be a mess of processes that
 probably aren't necessary, so here's what they look like:
 (lines indicate interprocess communication)
 
-DiscordLogger                  RedditLogger
-     |                               |
  DiscordBot -- SharedUserList -- RedditBot
 
 The discord and reddit bots are also async, meaning everything is a
@@ -25,7 +23,7 @@ from sheriapi import SheriAPI
 from RollingLogger import RollingLogger_Async
 from FileParser import FileParser
 
-VERSION = '2.2.1a'
+VERSION = '2.3.0'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -812,7 +810,7 @@ async def sendLogs(ctx):
 if __name__ == '__main__':
     print("BouncerBot : " + VERSION + "\nCreated by SockHungryClutz for the Furry Shitposting Guild\n(All further non-error messages will be output to logs)")
     # Start the logger
-    logger = RollingLogger_Async(logname, filesizemax, numlogsmax, logVerbosity)
+    logger = RollingLogger_Sync(logname, filesizemax, numlogsmax, logVerbosity)
     
     # Create the shared list between the processes
     man = Manager()
