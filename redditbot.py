@@ -3,7 +3,7 @@ import praw
 import time
 import asyncio
 from sheriapi import SheriAPI
-from RollingLogger import RollingLogger_Async
+from RollingLogger import RollingLogger_Sync
 from FileParser import FileParser
 
 """
