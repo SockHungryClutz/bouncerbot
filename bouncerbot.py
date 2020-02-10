@@ -23,7 +23,7 @@ from sheriapi import SheriAPI
 from RollingLogger import RollingLogger_Sync
 from FileParser import FileParser
 
-VERSION = '2.3.0a'
+VERSION = '2.3.0b'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
