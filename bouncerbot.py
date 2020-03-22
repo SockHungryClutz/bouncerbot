@@ -22,6 +22,7 @@ import redditbot
 from sheriapi import SheriAPI
 from RollingLogger import RollingLogger_Sync
 from FileParser import FileParser
+import random
 
 VERSION = '2.3.0b'
 
@@ -112,6 +113,16 @@ def isQualified(subKarma, comKarma):
 # Escapes underscores in usernames to prevent weird italics
 def fixUsername(name):
     return name.replace('_','\_')
+
+# Async utility to find a role by name
+async def getRole(roleName):
+    guilds = await bot.fetch_guilds().flatten()
+    for guild in guilds:
+        roles = await guild.fetch_roles()
+        for rol in roles:
+            if rol.name == roleName:
+                return rol
+    return None
 
 # Does processing for files of users to check
 def file_check(oldfn, newfn, channel, resultq):
@@ -503,11 +514,8 @@ async def cleanup(ctx):
     """Cleanup unused pings and print new users (mods only)"""
     logger.info("b.ping cleanup called")
     FileParser.writeNestedList("usermap_backup.txt", userMap, 'w')
-    guilds = await bot.fetch_guilds().flatten()
     activeIdList = []
-    for guild in guilds:
-        if guild.large:
-            await bot.request_offline_members(guild.id)
+    for guild in bot.guilds:
         for member in guild.members:
             if member.id != bot.user.id:
                 activeIdList.append(member.id)
@@ -806,6 +814,66 @@ async def sendLogs(ctx):
         await dm_chan.send(files=log_files)
     else:
         logger.warning("sendlogs failed: could not slide into DM's!")
+
+# April fool's day fun
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def quarantine(ctx):
+    """Initiate Quarantine and Forced Social Distancing Procedure..."""
+    members = []
+    logger.info("INITIATING THE QUARANTINE")
+    # get all non-bot members
+    for guild in bot.guilds:
+        if not guild.chunked and guild.large:
+            await bot.request_offline_members(guild)
+        for member in guild.members:
+            if not member.bot:
+                members.append(member)
+    # evenly divide them between two quarantine groups
+    totalMembers = len(members)
+    remainingMem = totalMembers
+    aRole = await getRole("Red Group")
+    bRole = await getRole("Blue Group")
+    aCount = 0
+    bCount = 0
+    threshold = 0.5
+    for mem in members:
+        fRand = random.random()
+        if fRand >= threshold:
+            await mem.add_roles(aRole, "Quarantine in effect (A)")
+            aCount += 1
+        else:
+            await mem.add_roles(bRole, "Quarantine in effect (B)")
+            bCount += 1
+        remainingMem -= 1
+        # recalculate threshold before next iteration
+        aDiff = aCount - bCount
+        bDiff = 0 - aDiff
+        if aCount == 0 or bDiff >= remainingMem:
+            threshold = 0.0  # always a for next
+        elif bCount == 0 or aDiff >= remainingMem:
+            threshold = 1.0  # always b for next
+        else:
+            threshold = float(aCount) / float(bCount)
+    await ctx.send("Quarantine established. " + str(aCount) + " in Red Group, " + str(bCount) + " in Blue Group.")
+
+# For when the fun is over
+@bot.command(hidden=True)
+@commands.check(is_admin)
+async def unquarantine(ctx):
+    """Decontamination and Reunification process initialize..."""
+    logger.info("QUARANTINE COMPLETE")
+    aRole = await getRole("Red Group")
+    bRole = await getRole("Blue Group")
+    for member in bot.get_all_members():
+        if not member.bot:
+            try:
+                await member.remove_roles(aRole, "Quarantine complete")
+            except BaseException as e:
+                try:
+                    await member.remove_roles(bRole, "Quarantine complete")
+                except BaseException as e:
+                    pass
 
 if __name__ == '__main__':
     print("BouncerBot : " + VERSION + "\nCreated by SockHungryClutz for the Furry Shitposting Guild\n(All further non-error messages will be output to logs)")
