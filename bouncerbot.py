@@ -23,9 +23,13 @@ from sheriapi import SheriAPI
 from RollingLogger import RollingLogger_Sync
 from FileParser import FileParser
 
-VERSION = '2.3.1'
+# Why, Discord?
+intents = discord.Intents.default()
+intents.members = True
 
-bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
+VERSION = '2.3.1a'
+
+bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True, intents=intents)
 
 # Read configuration, default global values
 config = configparser.ConfigParser()
@@ -256,6 +260,7 @@ async def on_message(message):
         if isinstance(message.channel, discord.DMChannel):
             if message.content[:6].lower() == "b.help":
                 await message.channel.send("No need for that! Just write me a message and I'll forward it to the mods, and then they can reply through me! If you wish to remain anonymous for your message, make sure it begins with the word \"anon\" (without quotes!)")
+                return
             if message.content[:4].lower() == "anon":
                 # Keep users anonymous
                 logger.info("Received message from Anonymous User ; " + str(message.id))
