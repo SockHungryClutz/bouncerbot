@@ -23,7 +23,7 @@ from sheriapi import SheriAPI
 from RollingLogger import RollingLogger_Sync
 from FileParser import FileParser
 
-VERSION = '2.3.0b'
+VERSION = '2.3.1'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True)
 
@@ -254,6 +254,8 @@ async def on_message(message):
     if not message.author.bot:
         # isinstance is poor form, but what're you going to do?
         if isinstance(message.channel, discord.DMChannel):
+            if message.content[:6].lower() == "b.help":
+                await message.channel.send("No need for that! Just write me a message and I'll forward it to the mods, and then they can reply through me! If you wish to remain anonymous for your message, make sure it begins with the word \"anon\" (without quotes!)")
             if message.content[:4].lower() == "anon":
                 # Keep users anonymous
                 logger.info("Received message from Anonymous User ; " + str(message.id))
@@ -613,38 +615,31 @@ async def sendlists(ctx):
 # admin command to message a user on behalf of the admins
 @bot.command(hidden=True)
 @commands.check(is_admin)
-async def sendmessage(ctx, *args):
+async def sendmessage(ctx, member: discord.Member=None, msg: str=None):
     """Message a user on behalf of the mods (mods only)"""
-    if len(args) <= 1:
-        await ctx.send("You need to specify a discord user and message!\neg. `b.sendmessage SimStart \"good bot\"`")
-    elif len(args) > 2:
-        await ctx.send("Be sure to wrap your message in double quotes!\neg. `b.sendmessage SimStart \"good bot\"`")
+    if member == None or msg == None:
+        await ctx.send("You need to specify a discord user and message!\neg. `b.sendmessage (@)SimStart \"good bot\"`")
     else:
-        logger.info("b.sendmessage called by: " + str(ctx.author.id) + " ; " + args[0] + " ; " + args[1])
-        usr = ctx.guild.get_member_named(args[0])
-        if usr != None:
-            dm_chan = await get_dm_channel(usr)
-            if dm_chan != None:
-                success = True
-                msg = args[1]
-                try:
-                    for item in ctx.message.attachments:
-                        msg += "\n" + item.url
-                except:
-                    logger.warning("Could not get URL for all attachments")
-                try:
-                    await dm_chan.send(msg)
-                except BaseException as e:
-                    success = False
-                if success:
-                    await ctx.send("Message sent! :e_mail:")
-                else:
-                    await ctx.send("Could not send message, user not in server or is blocking me!")
+        logger.info("b.sendmessage called by: " + str(ctx.author.id) + " ; " + str(member.id) + " ; " + msg)
+        dm_chan = await get_dm_channel(member)
+        if dm_chan != None:
+            success = True
+            try:
+                for item in ctx.message.attachments:
+                    msg += "\n" + item.url
+            except:
+                logger.warning("Could not get URL for all attachments")
+            try:
+                await dm_chan.send(msg)
+            except BaseException as e:
+                success = False
+            if success:
+                await ctx.send("Message sent! :e_mail:")
             else:
-                await ctx.send("Failed to open DM channel! Try again!")
-                logger.warning("sendmessage failed: could not slide into DM's!")
+                await ctx.send("Could not send message, user not in server or is blocking me!")
         else:
-            await ctx.send("Could not find the user, either use their display name or their discord identifier (username#1234)")
+            await ctx.send("Failed to open DM channel! Try again!")
+            logger.warning("sendmessage failed: could not slide into DM's!")
 
 # reply to a modmail DM
 @bot.command(hidden=True)
