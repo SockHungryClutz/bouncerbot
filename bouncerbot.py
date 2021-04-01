@@ -309,27 +309,27 @@ async def on_message(message):
                 # This is where the fun begins
                 async with aiohttp.ClientSession() as ses:
                     res = await SheriAPI.async_get(ses, "https://nine.websudoku.com/")
-                    sidx = res.content.find("cheat") + 7
+                    sidx = res.find("cheat") + 7
                     if sidx != 6:
-                        sidxe = res.content.find("'", sidx)
-                        puzzle = res.content[sidx:sidxe]
-                        sidx = res.content.find("editmask", sidxe)
-                        sidx = res.content.find("VALUE", sidx) + 7
-                        sidxe = res.content.find('"', sidx)
-                        mask = res.content[sidx:sidxe]
+                        sidxe = res.find("'", sidx)
+                        puzzle = res[sidx:sidxe]
+                        sidx = res.find("editmask", sidxe)
+                        sidx = res.find("VALUE", sidx) + 7
+                        sidxe = res.find('"', sidx)
+                        mask = res[sidx:sidxe]
                         replymsg = "```"
                         for sudcount in range(81):
                             if mask[sudcount] == "0":
-                                replymsg += puzzle[sudcount]
+                                replymsg += puzzle[sudcount] + " "
                             else:
-                                replymsg += " "
-                            if sudcount != 0
+                                replymsg += "  "
+                            if sudcount != 0:
                                 if (sudcount + 1) % 9 == 0:
                                     replymsg += "\n"
                                 elif (sudcount + 1) % 3 == 0:
                                     replymsg += "|"
                                 if (sudcount + 1) % 27 == 0 and sudcount != 80:
-                                    replymsg += "---+---+---"
+                                    replymsg += "------+------+------\n"
                         replymsg += "```"
                         await message.channel.send(replymsg)
             else:
