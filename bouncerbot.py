@@ -13,6 +13,7 @@ to handle checking large numbers of users
 import os
 import discord
 from discord.ext import commands
+import aiohttp
 import asyncio
 import configparser
 import time
@@ -27,7 +28,7 @@ from FileParser import FileParser
 intents = discord.Intents.default()
 intents.members = True
 
-VERSION = '2.3.1a'
+VERSION = '2.3.1f' # the "f" stands for "fools"
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True, intents=intents)
 
@@ -304,7 +305,35 @@ async def on_message(message):
             mailchannel = bot.get_channel(findChannel(config['general']['dm_channel']))
             if (message.channel.id == mailchannel.id) and (message.author.id != bot.user.id):
                 messageComboBreak = True
-            await bot.process_commands(message)
+            if "commit sudoku" in message.content.lower():
+                # This is where the fun begins
+                async with aiohttp.ClientSession() as ses:
+                    res = await SheriAPI.async_get(ses, "https://nine.websudoku.com/")
+                    sidx = res.content.find("cheat") + 7
+                    if sidx != 6:
+                        sidxe = res.content.find("'", sidx)
+                        puzzle = res.content[sidx:sidxe]
+                        sidx = res.content.find("editmask", sidxe)
+                        sidx = res.content.find("VALUE", sidx) + 7
+                        sidxe = res.content.find('"', sidx)
+                        mask = res.content[sidx:sidxe]
+                        replymsg = "```"
+                        for sudcount in range(81):
+                            if mask[sudcount] == "0":
+                                replymsg += puzzle[sudcount]
+                            else:
+                                replymsg += " "
+                            if sudcount != 0
+                                if (sudcount + 1) % 9 == 0:
+                                    replymsg += "\n"
+                                elif (sudcount + 1) % 3 == 0:
+                                    replymsg += "|"
+                                if (sudcount + 1) % 27 == 0 and sudcount != 80:
+                                    replymsg += "---+---+---"
+                        replymsg += "```"
+                        await message.channel.send(replymsg)
+            else:
+                await bot.process_commands(message)
 
 # check that's pretty useful
 async def is_admin(ctx):
