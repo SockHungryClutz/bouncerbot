@@ -27,7 +27,7 @@ from FileParser import FileParser
 intents = discord.Intents.default()
 intents.members = True
 
-VERSION = '2.3.1a'
+VERSION = '2.3.2'
 
 bot = commands.Bot(command_prefix='b.', description='BouncerBot '+VERSION+' - Helper bot to automate some tasks for the Furry Shitposting Guild\n(use "b.<command>" to give one of the following commands)', case_insensitive=True, intents=intents)
 
@@ -153,7 +153,7 @@ async def process_user(usr):
         elif result == -2:
             maxUsrRetry -= 1
     if result == -1:
-        return usr+', 0, 0, 0, "Server side SnoopSnoo Error occurred"'
+        return usr+', 0, 0, 0, "Server side Sherley Error occurred"'
     elif result == -2:
         return usr+', 0, 0, 0, "User not found, do they exist?"'
     else:
@@ -168,8 +168,8 @@ async def check_user_queue():
             newUsr = newUserQueue.get()
             logger.info("new user accepted: "+newUsr)
             redditurl = "https://www.reddit.com/u/" + newUsr
-            snoopurl = "https://snoopsnoo.com/u/" + newUsr
-            msg = fixUsername(newUsr) + " is now eligible for entry! :grinning:\n" + redditurl + "\n" + snoopurl
+            metaurl = "https://redditmetis.com/user/" + newUsr
+            msg = fixUsername(newUsr) + " is now eligible for entry! :grinning:\n" + redditurl + "\n" + metaurl
             try:
                 await bot.get_channel(findChannel(config['general']['user_announce_channel'])).send(content=msg, embed=None)
             except BaseException as e:
@@ -200,6 +200,10 @@ async def check_post_queue():
                 isSpoiler = True
                 newPost = newPost[:-1]
             realtitle = fixUsername(newPost[0])
+            # Reddit, your video hosting is ass
+            if "v.redd" in newPost[2]:
+                postSnowflake = newPost[3][(newPost[3].rfind("/") + 1):]
+                newPost[2] = "https://www.reddit.com/r/" + subreddit + "/comments/" + postSnowflake + "?utm_source=share"
             if isSpoiler:
                 msg = realtitle+"\nuser: "+realuser+"\ncontent: ||"+newPost[2]+"||\npost: ||"+newPost[3]+"||"
             else:
@@ -348,7 +352,7 @@ async def check_user(username, ctx):
     if ref.find("EXCEPTION") == 0:
         # some server side exception, tell user not to panic
         if ctx != None:
-            logger.warning("snoopsnoo error: " + ref)
+            logger.warning("Sherley error: " + ref)
         return -1,totalC,totalS,firlC,firlK,updTime
     elif ref.find("ERROR") == 0:
         # something went wrong, say something and return
@@ -408,7 +412,7 @@ async def check(ctx, *args):
                 # Build the response embed
                 if updTime == "":
                     updTime = "Now"
-                embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://www.reddit.com/u/" + name + "\nhttps://snoopsnoo.com/u/" + name, color=0xa78c2c)
+                embd = discord.Embed(title="Overview for " + fixUsername(name), description="https://www.reddit.com/u/" + name + "\nhttps://redditmetis.com/user/" + name, color=0xa78c2c)
                 embd.add_field(name="Total Karma", value="Submission: " + str(totalS) + " | Comment: " + str(totalC), inline=False)
                 embd.add_field(name=subreddit+" Karma", value="Submission: " + str(firlK) + " | Comment: " + str(firlC), inline=False)
                 embd.add_field(name="Last Refreshed: ", value=updTime, inline=True)
@@ -418,26 +422,6 @@ async def check(ctx, *args):
                 if(isQualified(firlK, firlC) and not (name.lower() in acceptedusers)):
                     acceptedusers.append(name.lower())
                     newUserQueue.put(name)
-
-@bot.command()
-async def refresh(ctx, *args):
-    """Manually refresh a user profile on SnoopSnoo"""
-    if len(args) <= 0:
-        await ctx.send("You need to specify a reddit user!\neg. `b.refresh SimStart`")
-    else:
-        logger.info("b.refresh called: "+args[0])
-        await ctx.send("Give me a minute while I refresh" + args[0] + "'s profile...")
-        ref,usr = await SheriAPI.async_refreshSnoop(args[0])
-        if ref.find("EXCEPTION") == 0:
-            # some server side exception, tell user not to panic
-            logger.warning("snoopsnoo error: " + ref)
-            return await ctx.send("Oopsie Woopsie! SnoopSnoo made a little fucky wucky!\n(try again in a minute)")
-        elif ref.find("ERROR") == 0:
-            # something went wrong, say something and return
-            logger.warning("refresh error: " + ref)
-            return await ctx.send("Error getting info on " + fixUsername(args[0]) + ", are you sure the user exists?")
-        else:
-            return await ctx.send("Updated SnoopSnoo Profile now available!\nhttps://snoopsnoo.com/u/" + args[0])
 
 @bot.command()
 @commands.check(is_admin)

@@ -1,5 +1,5 @@
 # Almost drop-in replacement for snoopsnoo library
-# Still update snoopnsoo because the overviews are fun
+# Well, now that site is dead...
 import requests
 import json
 import aiohttp
@@ -80,28 +80,6 @@ class SheriAPI():
             idx = res.find('"_errors":[{')
             if idx != -1:
                 return ("ERROR getting user: " + user), None
-            try:
-                jd = SheriAPI.jsonStrToObj(res)
-            except Exception as e:
-                return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + res, None
-            return res, jd
-    
-    # Async - This is the one that takes forever to respond
-    @staticmethod
-    async def async_refreshSnoop(user):
-        async with aiohttp.ClientSession() as ses:
-            res = await SheriAPI.async_get(ses, "https://sherley.azurewebsites.net/api/FullQuery?username=" + user)
-            idx = res.find('"_errors":[{')
-            if idx != -1:
-                return ("ERROR getting user: " + user), None
-            try:
-                jd = SheriAPI.jsonStrToObj(res)
-            except Exception as e:
-                return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + res, None
-            ret = await SheriAPI.async_post_json(ses, "https://snoopsnoo.com/update", json=jd)
-            if ret != "OK":
-                return "EXCEPTION " + str(e) + "\n>>>response content<<<\n" + ret, None
-            res = await SheriAPI.async_get(ses, "https://snoopsnoo.com/api/u/" + user)
             try:
                 jd = SheriAPI.jsonStrToObj(res)
             except Exception as e:
